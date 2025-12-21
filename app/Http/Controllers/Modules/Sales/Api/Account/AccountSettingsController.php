@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api\Account;
+namespace App\Http\Controllers\Modules\Sales\Api\Account;
 
 
 use Illuminate\Http\Request;

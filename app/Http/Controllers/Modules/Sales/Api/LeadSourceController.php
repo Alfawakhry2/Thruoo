@@ -1,61 +1,61 @@
 <?php
 
-namespace App\Http\Controllers\Api\Leads;
+namespace App\Http\Controllers\Modules\Sales\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Modules\Leads\LeadStatus;
+use App\Models\Modules\Sales\LeadSource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
-class LeadStatusController extends Controller
+class LeadSourceController extends Controller
 {
     /**
-     * Get all lead statuses with pagination
+     * Get all lead sources with pagination
      */
     public function index(Request $request): JsonResponse
     {
         $perPage = $request->query('per_page', 15);
         $status = $request->query('status'); // active, inactive, or all
 
-        $query = LeadStatus::with('creator');
+        $query = LeadSource::query();
 
         if ($status && $status !== 'all') {
             $query->where('status', $status);
         }
 
-        $statuses = $query->ordered()->paginate($perPage);
+        $sources = $query->latest()->paginate($perPage);
 
         return response()->json([
             'success' => true,
-            'data' => $statuses,
+            'data' => $sources,
         ]);
     }
 
     /**
-     * Get all lead statuses without pagination (ordered)
+     * Get all lead sources without pagination
      */
     public function all(Request $request): JsonResponse
     {
         $status = $request->query('status', 'active');
 
-        $query = LeadStatus::query();
+        $query = LeadSource::query();
 
         if ($status !== 'all') {
             $query->where('status', $status);
         }
 
-        $statuses = $query->ordered()->get();
+        $sources = $query->orderBy('name')->get();
 
         return response()->json([
             'success' => true,
-            'data' => $statuses,
+            'data' => $sources,
         ]);
     }
 
     /**
-     * Create a new lead status
+     * Create a new lead source
      */
     public function store(Request $request): JsonResponse
     {
@@ -64,16 +64,14 @@ class LeadStatusController extends Controller
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to create lead statuses',
+                'message' => 'You do not have permission to create lead sources',
             ], 403);
         }
 
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:255'],
-            'name_ar' => ['nullable', 'string', 'max:255'],
+            'name_ar' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'order' => ['nullable', 'integer', 'min:0'],
-            'color' => ['nullable', 'string', 'regex:/^#[0-9A-F]{6}$/i'],
             'status' => ['nullable', 'in:active,inactive'],
         ]);
 
@@ -87,48 +85,38 @@ class LeadStatusController extends Controller
         $data = $validator->validated();
         $data['created_by'] = $user->id;
 
-        // Auto-assign order if not provided
-        if (!isset($data['order'])) {
-            $maxOrder = LeadStatus::max('order') ?? 0;
-            $data['order'] = $maxOrder + 1;
-        }
-
-        // Default color if not provided
-        if (!isset($data['color'])) {
-            $data['color'] = '#3B82F6';
-        }
-
-        $leadStatus = LeadStatus::create($data);
+        $source = LeadSource::create($data);
 
         return response()->json([
             'success' => true,
-            'message' => 'Lead status created successfully',
-            'data' => $leadStatus,
+            'message' => 'Lead source created successfully',
+            // 'data' => $source->load('creator'),
+            'data' => $source,
         ], 201);
     }
 
     /**
-     * Get a specific lead status
+     * Get a specific lead source
      */
     public function show($id): JsonResponse
     {
-        $leadStatus = LeadStatus::find($id);
+        $source = LeadSource::with(['creator', 'leads'])->find($id);
 
-        if (!$leadStatus) {
+        if (!$source) {
             return response()->json([
                 'success' => false,
-                'message' => 'Lead status not found',
+                'message' => 'Lead source not found',
             ], 404);
         }
 
         return response()->json([
             'success' => true,
-            'data' => $leadStatus,
+            'data' => $source,
         ]);
     }
 
     /**
-     * Update a lead status
+     * Update a lead source
      */
     public function update(Request $request, $id): JsonResponse
     {
@@ -137,16 +125,16 @@ class LeadStatusController extends Controller
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to update lead statuses',
+                'message' => 'You do not have permission to update lead sources',
             ], 403);
         }
 
-        $leadStatus = LeadStatus::find($id);
+        $source = LeadSource::find($id);
 
-        if (!$leadStatus) {
+        if (!$source) {
             return response()->json([
                 'success' => false,
-                'message' => 'Lead status not found',
+                'message' => 'Lead source not found',
             ], 404);
         }
 
@@ -154,8 +142,6 @@ class LeadStatusController extends Controller
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'name_ar' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'order' => ['nullable', 'integer', 'min:0'],
-            'color' => ['nullable', 'string', 'regex:/^#[0-9A-F]{6}$/i'],
             'status' => ['sometimes', 'required', 'in:active,inactive'],
         ]);
 
@@ -166,17 +152,18 @@ class LeadStatusController extends Controller
             ], 422);
         }
 
-        $leadStatus->update($validator->validated());
+        $source->update($validator->validated());
 
         return response()->json([
             'success' => true,
-            'message' => 'Lead status updated successfully',
-            'data' => $leadStatus,
+            'message' => 'Lead source updated successfully',
+            // 'data' => $source->fresh(['creator']),
+            'data' => $source,
         ]);
     }
 
     /**
-     * Delete a lead status
+     * Delete a lead source
      */
     public function destroy($id): JsonResponse
     {
@@ -185,75 +172,37 @@ class LeadStatusController extends Controller
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to delete lead statuses',
+                'message' => 'You do not have permission to delete lead sources',
             ], 403);
         }
 
-        $leadStatus = LeadStatus::find($id);
+        $source = LeadSource::find($id);
 
-        if (!$leadStatus) {
+        if (!$source) {
             return response()->json([
                 'success' => false,
-                'message' => 'Lead status not found',
+                'message' => 'Lead source not found',
             ], 404);
         }
 
-        // Check if status has leads
-        if ($leadStatus->leads()->count() > 0) {
+        // Check if source has leads
+        if ($source->leads()->count() > 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cannot delete lead status with existing leads',
+                'message' => 'Cannot delete lead source with existing leads',
             ], 400);
         }
 
-        $leadStatus->delete();
+        $source->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Lead status deleted successfully',
+            'message' => 'Lead source deleted successfully',
         ]);
     }
 
     /**
-     * Reorder lead statuses
-     */
-    public function reorder(Request $request): JsonResponse
-    {
-        // Check permission
-        $user = Auth::user();
-        if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You do not have permission to reorder lead statuses',
-            ], 403);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'statuses' => ['required', 'array', 'min:1'],
-            'statuses.*.id' => ['required', 'integer', 'exists:lead_statuses,id'],
-            'statuses.*.order' => ['required', 'integer', 'min:0'],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        foreach ($request->statuses as $statusData) {
-            LeadStatus::where('id', $statusData['id'])
-                ->update(['order' => $statusData['order']]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Lead statuses reordered successfully',
-        ]);
-    }
-
-    /**
-     * Batch delete lead statuses
+     * Batch delete lead sources
      */
     public function batchDelete(Request $request): JsonResponse
     {
@@ -262,13 +211,13 @@ class LeadStatusController extends Controller
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to delete lead statuses',
+                'message' => 'You do not have permission to delete lead sources',
             ], 403);
         }
 
         $validator = Validator::make($request->all(), [
             'ids' => ['required', 'array', 'min:1'],
-            'ids.*' => ['required', 'integer', 'exists:lead_statuses,id'],
+            'ids.*' => ['required', 'integer', 'exists:lead_sources,id'],
         ]);
 
         if ($validator->fails()) {
@@ -278,28 +227,28 @@ class LeadStatusController extends Controller
             ], 422);
         }
 
-        // Check if any status has leads
-        $statusesWithLeads = LeadStatus::whereIn('id', $request->ids)
+        // Check if any source has leads
+        $sourcesWithLeads = LeadSource::whereIn('id', $request->ids)
             ->has('leads')
             ->count();
 
-        if ($statusesWithLeads > 0) {
+        if ($sourcesWithLeads > 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cannot delete lead statuses with existing leads',
+                'message' => 'Cannot delete lead sources with existing leads',
             ], 400);
         }
 
-        LeadStatus::whereIn('id', $request->ids)->delete();
+        LeadSource::whereIn('id', $request->ids)->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Lead statuses deleted successfully',
+            'message' => 'Lead sources deleted successfully',
         ]);
     }
 
     /**
-     * Toggle lead status status (active/inactive)
+     * Toggle lead source status
      */
     public function toggleStatus($id): JsonResponse
     {
@@ -308,26 +257,26 @@ class LeadStatusController extends Controller
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to update lead status',
+                'message' => 'You do not have permission to update lead source status',
             ], 403);
         }
 
-        $leadStatus = LeadStatus::find($id);
+        $source = LeadSource::find($id);
 
-        if (!$leadStatus) {
+        if (!$source) {
             return response()->json([
                 'success' => false,
-                'message' => 'Lead status not found',
+                'message' => 'Lead source not found',
             ], 404);
         }
 
-        $leadStatus->status = $leadStatus->status === 'active' ? 'inactive' : 'active';
-        $leadStatus->save();
+        $source->status = $source->status === 'active' ? 'inactive' : 'active';
+        $source->save();
 
         return response()->json([
             'success' => true,
-            'message' => 'Lead status updated successfully',
-            'data' => $leadStatus,
+            'message' => 'Lead source status updated successfully',
+            'data' => $source,
         ]);
     }
 }

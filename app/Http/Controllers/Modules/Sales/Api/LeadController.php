@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Http\Controllers\Api\Leads;
+namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Modules\Leads\Lead;
-use App\Models\Modules\Leads\LeadSource;
-use App\Models\Modules\Leads\LeadStatus;
+use App\Models\Modules\Sales\Lead;
+use App\Models\Modules\Sales\LeadSource;
+use App\Models\Modules\Sales\LeadStatus;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

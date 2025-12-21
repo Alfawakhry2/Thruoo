@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models\Modules\Leads;
+namespace App\Models\Modules\Sales;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -155,9 +155,9 @@ class Lead extends Model
     {
         return $query->where(function ($q) use ($search) {
             $q->where('name', 'like', "%{$search}%")
-              ->orWhere('email', 'like', "%{$search}%")
-              ->orWhere('phone', 'like', "%{$search}%")
-              ->orWhere('company', 'like', "%{$search}%");
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('phone', 'like', "%{$search}%")
+                ->orWhere('company', 'like', "%{$search}%");
         });
     }
 
@@ -178,5 +178,21 @@ class Lead extends Model
     public function markAsContacted()
     {
         $this->update(['last_contacted_at' => now()]);
+    }
+
+    /**
+     * Get all contracts for this lead
+     */
+    public function contracts()
+    {
+        return $this->hasMany(\App\Models\Modules\Sales\Contract::class);
+    }
+
+    /**
+     * Get all activity logs for this lead
+     */
+    public function activityLogs()
+    {
+        return $this->hasMany(\App\Models\Modules\Sales\ActivityLog::class);
     }
 }

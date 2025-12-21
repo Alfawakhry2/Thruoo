@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Http\Controllers\Api\Leads;
+namespace App\Http\Controllers\Modules\Sales\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Modules\Leads\Module;
+use App\Models\Modules\Sales\Module;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;

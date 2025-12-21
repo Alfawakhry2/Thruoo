@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\Modules\Sales\Api;
 
 use App\Helpers\SubdomainGenerator;
 use App\Http\Controllers\Controller;
@@ -342,7 +342,7 @@ class TenantRegistrationController extends Controller
                 'code' => $request->code,
                 'valid' => $isValid,
                 'discount' => $isValid ? '10%' : null,
-                'message' => $isValid 
+                'message' => $isValid
                     ? 'Referral code applied! You get 10% off your first paid plan.'
                     : 'Invalid referral code',
             ],

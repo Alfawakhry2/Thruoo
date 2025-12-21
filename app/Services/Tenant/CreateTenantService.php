@@ -37,7 +37,7 @@ class CreateTenantService
         $customSubdomain = $data['subdomain'] ?? null;
 
         // Generate subdomain from company name or use custom
-        $subdomain = $customSubdomain 
+        $subdomain = $customSubdomain
             ? SubdomainGenerator::sanitize($customSubdomain)
             : SubdomainGenerator::generate($company['name']);
 
@@ -65,12 +65,12 @@ class CreateTenantService
                 'name' => $company['name'],
                 'subdomain' => $subdomain,
                 'database' => $databaseName,
-                
+
                 // Contact Info
                 'email' => $personal['email'],
                 'phone' => $personal['phone'] ?? null,
                 'business_email' => $company['business_email'] ?? null,
-                
+
                 // Company Details
                 'industry' => $company['industry'] ?? null,
                 'staff_count' => $company['staff_count'] ?? null,
@@ -78,24 +78,24 @@ class CreateTenantService
                 'country' => $company['country'] ?? null,
                 'city' => $company['city'] ?? null,
                 'address' => $company['address'] ?? null,
-                
+
                 // Legal Info
                 'legal_id' => $company['legal_id'] ?? null,
                 'tax_id' => $company['tax_id'] ?? null,
-                
+
                 // Branding
                 'logo' => $logoPath,
-                
+
                 // Referral Info
                 'referral_code' => $referral['code'] ?? null,
                 'referral_relation' => $referral['relation'] ?? null,
-                
+
                 // Subscription & Status
                 'status' => Tenant::STATUS_ACTIVE,
                 'trial_ends_at' => now()->addDays($this->trialDays),
                 'plan' => Tenant::PLAN_TRIAL,
                 'enabled_modules' => $modules,
-                
+
                 // Settings
                 'settings' => [
                     'timezone' => 'UTC',
@@ -103,7 +103,7 @@ class CreateTenantService
                     'currency' => 'USD',
                 ],
             ]);
-            
+
             // Commit tenant record first
             DB::connection('mysql')->commit();
 
@@ -129,7 +129,6 @@ class CreateTenantService
                     'owner_email' => $owner->email,
                     'team_count' => count($teamMembers),
                 ]);
-
             } catch (Exception $e) {
                 // If tenant DB operations fail, mark tenant as failed
                 $tenant->update(['status' => Tenant::STATUS_SUSPENDED]);
@@ -141,10 +140,9 @@ class CreateTenantService
             }
 
             return $tenant;
-
         } catch (Exception $e) {
             DB::connection('mysql')->rollBack();
-            
+
             // Try to clean up the database if tenant creation failed
             try {
                 DB::connection('mysql')->statement("DROP DATABASE IF EXISTS `{$databaseName}`");
@@ -154,7 +152,7 @@ class CreateTenantService
                     'error' => $dropError->getMessage(),
                 ]);
             }
-            
+
             throw $e;
         }
     }
@@ -178,14 +176,14 @@ class CreateTenantService
             $extension = $matches[1];
             $data = substr($logo, strpos($logo, ',') + 1);
             $data = base64_decode($data);
-            
+
             if ($data === false) {
                 Log::warning("Failed to decode base64 logo", ['subdomain' => $subdomain]);
                 return null;
             }
 
             $filename = "tenants/{$subdomain}/logo.{$extension}";
-            
+
             try {
                 Storage::disk('public')->put($filename, $data);
                 return $filename;
@@ -216,7 +214,6 @@ class CreateTenantService
             );
 
             Log::info("Tenant database created", ['database' => $databaseName]);
-
         } catch (Exception $e) {
             throw new Exception("Failed to create tenant database: " . $e->getMessage());
         }
@@ -240,7 +237,6 @@ class CreateTenantService
             ]);
 
             Log::info("Tenant migrations completed", ['tenant_id' => $tenant->id]);
-
         } catch (Exception $e) {
             throw new Exception("Failed to run tenant migrations: " . $e->getMessage());
         }
@@ -269,6 +265,21 @@ class CreateTenantService
                 'email_verified_at' => now(),
             ]);
 
+            // After: $user = User::create([...]);
+            // Add this:
+
+            // Create modules based on what user selected during registration
+            if (!empty($validated['modules'])) {
+                foreach ($validated['modules'] as $moduleName) {
+                    \App\Models\Modules\Sales\Module::create([
+                        'name' => $moduleName,
+                        'status' => 'active',
+                        'subscription_start' => now(),
+                        'trial_end' => now()->addDays(14), // 14 days trial
+                    ]);
+                }
+            }
+
             // Assign Super Admin role
             $adminRole = Role::where('name', 'Super Admin')
                 ->where('guard_name', 'web')
@@ -281,7 +292,7 @@ class CreateTenantService
                 $adminRole = Role::where('name', 'Admin')
                     ->where('guard_name', 'web')
                     ->first();
-                    
+
                 if ($adminRole) {
                     $user->assignRole($adminRole);
                 } else {
@@ -298,7 +309,6 @@ class CreateTenantService
             ]);
 
             return $user;
-
         } catch (Exception $e) {
             $this->resetDefaultConnection();
             throw new Exception("Failed to create owner user: " . $e->getMessage());
@@ -356,7 +366,6 @@ class CreateTenantService
             $this->resetDefaultConnection();
 
             return $createdUsers;
-
         } catch (Exception $e) {
             $this->resetDefaultConnection();
             Log::error("Failed to create some team members", [
@@ -394,10 +403,10 @@ class CreateTenantService
     {
         $parts = explode('@', $email);
         $localPart = $parts[0];
-        
+
         // Replace dots and underscores with spaces
         $name = str_replace(['.', '_', '-'], ' ', $localPart);
-        
+
         // Capitalize each word
         return Str::title($name);
     }
@@ -436,7 +445,7 @@ class CreateTenantService
                 'invoices.create',
                 'invoices.edit',
                 'invoices.delete',
-                
+
                 // General
                 'reports.view',
                 'settings.view',
@@ -460,34 +469,64 @@ class CreateTenantService
             // Create roles with their permissions
             $roles = [
                 'Super Admin' => Permission::all()->pluck('name')->toArray(),
-                
+
                 'Admin' => [
-                    'leads.view', 'leads.create', 'leads.edit', 'leads.delete',
-                    'deals.view', 'deals.create', 'deals.edit', 'deals.delete',
-                    'proposals.view', 'proposals.create', 'proposals.edit', 'proposals.delete',
-                    'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.delete',
+                    'leads.view',
+                    'leads.create',
+                    'leads.edit',
+                    'leads.delete',
+                    'deals.view',
+                    'deals.create',
+                    'deals.edit',
+                    'deals.delete',
+                    'proposals.view',
+                    'proposals.create',
+                    'proposals.edit',
+                    'proposals.delete',
+                    'invoices.view',
+                    'invoices.create',
+                    'invoices.edit',
+                    'invoices.delete',
                     'reports.view',
-                    'settings.view', 'settings.edit',
-                    'users.view', 'users.create', 'users.edit',
+                    'settings.view',
+                    'settings.edit',
+                    'users.view',
+                    'users.create',
+                    'users.edit',
                 ],
-                
+
                 'Assistant' => [
-                    'leads.view', 'leads.create', 'leads.edit',
-                    'deals.view', 'deals.create', 'deals.edit',
-                    'proposals.view', 'proposals.create', 'proposals.edit',
-                    'invoices.view', 'invoices.create',
+                    'leads.view',
+                    'leads.create',
+                    'leads.edit',
+                    'deals.view',
+                    'deals.create',
+                    'deals.edit',
+                    'proposals.view',
+                    'proposals.create',
+                    'proposals.edit',
+                    'invoices.view',
+                    'invoices.create',
                     'reports.view',
                 ],
-                
+
                 'Sales' => [
-                    'leads.view', 'leads.create', 'leads.edit',
-                    'deals.view', 'deals.create', 'deals.edit',
-                    'proposals.view', 'proposals.create',
+                    'leads.view',
+                    'leads.create',
+                    'leads.edit',
+                    'deals.view',
+                    'deals.create',
+                    'deals.edit',
+                    'proposals.view',
+                    'proposals.create',
                     'invoices.view',
                 ],
-                
+
                 'Finance' => [
-                    'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.delete',
+                    'invoices.view',
+                    'invoices.create',
+                    'invoices.edit',
+                    'invoices.delete',
                     'reports.view',
                 ],
             ];
@@ -503,7 +542,6 @@ class CreateTenantService
             $this->resetDefaultConnection();
 
             Log::info("Roles and permissions seeded", ['tenant_id' => $tenant->id]);
-
         } catch (Exception $e) {
             $this->resetDefaultConnection();
             Log::error("Failed to seed roles/permissions", [
