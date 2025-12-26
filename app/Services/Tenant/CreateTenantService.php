@@ -242,79 +242,137 @@ class CreateTenantService
         }
     }
 
-    /**
-     * Create owner/admin user in tenant database
-     */
+    // /**
+    //  * Create owner/admin user in tenant database
+    //  */
+    // protected function createOwnerUser(Tenant $tenant, array $personal): User
+    // {
+    //     $this->switchToTenantConnection($tenant);
+
+    //     try {
+    //         // Create the owner user
+    //         $user = User::create([
+    //             'name' => $personal['name'],
+    //             'email' => $personal['email'],
+    //             'password' => Hash::make($personal['password']),
+    //             'phone' => $personal['phone'] ?? null,
+    //             'title' => $personal['title'] ?? null,
+    //             'birth_year' => $personal['birth_year'] ?? null,
+    //             'how_know_us' => $personal['how_know_us'] ?? null,
+    //             'status' => User::STATUS_ACTIVE,
+    //             'is_owner' => true,
+    //             'profile_completed' => true,
+    //             'email_verified_at' => now(),
+    //         ]);
+
+    //         // After: $user = User::create([...]);
+    //         // Add this:
+
+
+    //         // Assign Super Admin role
+    //         $adminRole = Role::where('name', 'Super Admin')
+    //             ->where('guard_name', 'web')
+    //             ->first();
+
+    //         if ($adminRole) {
+    //             $user->assignRole($adminRole);
+    //         } else {
+    //             // Fallback to Admin if Super Admin doesn't exist
+    //             $adminRole = Role::where('name', 'Admin')
+    //                 ->where('guard_name', 'web')
+    //                 ->first();
+
+    //             if ($adminRole) {
+    //                 $user->assignRole($adminRole);
+    //             } else {
+    //                 throw new Exception("No admin role found. Make sure roles are seeded.");
+    //             }
+    //         }
+
+    //         $this->resetDefaultConnection();
+
+    //         Log::info("Owner user created", [
+    //             'tenant_id' => $tenant->id,
+    //             'user_id' => $user->id,
+    //             'email' => $user->email,
+    //         ]);
+
+    //         return $user;
+    //     } catch (Exception $e) {
+    //         $this->resetDefaultConnection();
+    //         throw new Exception("Failed to create owner user: " . $e->getMessage());
+    //     }
+    // }
+
     protected function createOwnerUser(Tenant $tenant, array $personal): User
-    {
-        $this->switchToTenantConnection($tenant);
+{
+    $this->switchToTenantConnection($tenant);
 
-        try {
-            // Create the owner user
-            $user = User::create([
-                'name' => $personal['name'],
-                'email' => $personal['email'],
-                'password' => Hash::make($personal['password']),
-                'phone' => $personal['phone'] ?? null,
-                'title' => $personal['title'] ?? null,
-                'birth_year' => $personal['birth_year'] ?? null,
-                'how_know_us' => $personal['how_know_us'] ?? null,
-                'status' => User::STATUS_ACTIVE,
-                'is_owner' => true,
-                'profile_completed' => true,
-                'email_verified_at' => now(),
+    try {
+        // Create the owner user
+        $user = User::create([
+            'name' => $personal['name'],
+            'email' => $personal['email'],
+            'password' => Hash::make($personal['password']),
+            'phone' => $personal['phone'] ?? null,
+            'title' => $personal['title'] ?? null,
+            'birth_year' => $personal['birth_year'] ?? null,
+            'how_know_us' => $personal['how_know_us'] ?? null,
+            'status' => User::STATUS_ACTIVE,
+            'is_owner' => true,
+            'profile_completed' => true,
+            'email_verified_at' => now(),
+        ]);
+
+        // ============================================
+        // CREATE MODULES BASED ON SUBSCRIPTION
+        // ============================================
+        $enabledModules = $tenant->enabled_modules ?? ['sales'];
+
+        foreach ($enabledModules as $moduleName) {
+            \App\Models\Modules\Module::create([
+                'name' => ucfirst($moduleName),
+                'status' => 'active',
+                'subscription_start' => now(),
+                'trial_end' => now()->addDays(14),
             ]);
+        }
+        // ============================================
 
-            // After: $user = User::create([...]);
-            // Add this:
+        // Assign Super Admin role
+        $adminRole = Role::where('name', 'Super Admin')
+            ->where('guard_name', 'web')
+            ->first();
 
-            // Create modules based on what user selected during registration
-            if (!empty($validated['modules'])) {
-                foreach ($validated['modules'] as $moduleName) {
-                    \App\Models\Modules\Sales\Module::create([
-                        'name' => $moduleName,
-                        'status' => 'active',
-                        'subscription_start' => now(),
-                        'trial_end' => now()->addDays(14), // 14 days trial
-                    ]);
-                }
-            }
-
-            // Assign Super Admin role
-            $adminRole = Role::where('name', 'Super Admin')
+        if ($adminRole) {
+            $user->assignRole($adminRole);
+        } else {
+            // Fallback to Admin if Super Admin doesn't exist
+            $adminRole = Role::where('name', 'Admin')
                 ->where('guard_name', 'web')
                 ->first();
 
             if ($adminRole) {
                 $user->assignRole($adminRole);
             } else {
-                // Fallback to Admin if Super Admin doesn't exist
-                $adminRole = Role::where('name', 'Admin')
-                    ->where('guard_name', 'web')
-                    ->first();
-
-                if ($adminRole) {
-                    $user->assignRole($adminRole);
-                } else {
-                    throw new Exception("No admin role found. Make sure roles are seeded.");
-                }
+                throw new Exception("No admin role found. Make sure roles are seeded.");
             }
-
-            $this->resetDefaultConnection();
-
-            Log::info("Owner user created", [
-                'tenant_id' => $tenant->id,
-                'user_id' => $user->id,
-                'email' => $user->email,
-            ]);
-
-            return $user;
-        } catch (Exception $e) {
-            $this->resetDefaultConnection();
-            throw new Exception("Failed to create owner user: " . $e->getMessage());
         }
-    }
 
+        $this->resetDefaultConnection();
+
+        Log::info("Owner user created", [
+            'tenant_id' => $tenant->id,
+            'user_id' => $user->id,
+            'email' => $user->email,
+        ]);
+
+        return $user;
+    } catch (Exception $e) {
+        $this->resetDefaultConnection();
+        throw new Exception("Failed to create owner user: " . $e->getMessage());
+    }
+}
     /**
      * Create team members in tenant database
      */

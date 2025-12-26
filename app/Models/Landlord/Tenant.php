@@ -31,12 +31,12 @@ class Tenant extends BaseTenant
         'subdomain',
         'domain',
         'database',
-        
+
         // Contact Info
         'email',
         'phone',
         'business_email',
-        
+
         // Company Details
         'industry',
         'staff_count',
@@ -44,25 +44,25 @@ class Tenant extends BaseTenant
         'country',
         'city',
         'address',
-        
+
         // Legal Info
         'legal_id',
         'tax_id',
-        
+
         // Branding
         'logo',
-        
+
         // Referral Info
         'referral_code',
         'referral_relation',
-        
+
         // Subscription & Status
         'status',
         'trial_ends_at',
         'subscription_ends_at',
         'plan',
         'enabled_modules',
-        
+
         // Settings & Meta
         'settings',
         'metadata',
@@ -194,8 +194,8 @@ class Tenant extends BaseTenant
      */
     public function isOnTrial(): bool
     {
-        return $this->plan === self::PLAN_TRIAL && 
-               $this->trial_ends_at && 
+        return $this->plan === self::PLAN_TRIAL &&
+               $this->trial_ends_at &&
                $this->trial_ends_at->isFuture();
     }
 
@@ -263,8 +263,8 @@ class Tenant extends BaseTenant
             return false;
         }
 
-        return $this->isOnTrial() || 
-               $this->isInGracePeriod() || 
+        return $this->isOnTrial() ||
+               $this->isInGracePeriod() ||
                ($this->subscription_ends_at && $this->subscription_ends_at->isFuture());
     }
 
@@ -311,7 +311,7 @@ class Tenant extends BaseTenant
     public function getDatabaseConnectionConfig(): array
     {
         $config = config('database.connections.mysql');
-        
+
         return array_merge($config, [
             'database' => $this->database,
         ]);
@@ -339,5 +339,19 @@ class Tenant extends BaseTenant
     public function cancel(): void
     {
         $this->update(['status' => self::STATUS_CANCELLED]);
+    }
+
+
+    public function getLogoUrlAttribute(): ?string
+    {
+        if ($this->logo) {
+            // If it's already a URL, return as is
+            if (filter_var($this->logo, FILTER_VALIDATE_URL)) {
+                return $this->logo;
+            }
+            // Otherwise, generate storage URL
+            return asset('storage/' . $this->logo);
+        }
+        return null;
     }
 }

@@ -14,8 +14,12 @@ class LeadStatusController extends Controller
     /**
      * Get all lead statuses with pagination
      */
-    public function index(Request $request): JsonResponse
+    public function index($moduleId,Request $request): JsonResponse
     {
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
         $perPage = $request->query('per_page', 15);
         $status = $request->query('status'); // active, inactive, or all
 
@@ -36,8 +40,12 @@ class LeadStatusController extends Controller
     /**
      * Get all lead statuses without pagination (ordered)
      */
-    public function all(Request $request): JsonResponse
+    public function all($moduleId,Request $request): JsonResponse
     {
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
         $status = $request->query('status', 'active');
 
         $query = LeadStatus::query();
@@ -57,8 +65,12 @@ class LeadStatusController extends Controller
     /**
      * Create a new lead status
      */
-    public function store(Request $request): JsonResponse
+    public function store($moduleId,Request $request): JsonResponse
     {
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
         // Check permission
         $user = Auth::user();
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
@@ -110,8 +122,12 @@ class LeadStatusController extends Controller
     /**
      * Get a specific lead status
      */
-    public function show($id): JsonResponse
+    public function show($moduleId,$id): JsonResponse
     {
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
         $leadStatus = LeadStatus::find($id);
 
         if (!$leadStatus) {
@@ -130,8 +146,12 @@ class LeadStatusController extends Controller
     /**
      * Update a lead status
      */
-    public function update(Request $request, $id): JsonResponse
+    public function update($moduleId,Request $request, $id): JsonResponse
     {
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
         // Check permission
         $user = Auth::user();
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
@@ -178,8 +198,13 @@ class LeadStatusController extends Controller
     /**
      * Delete a lead status
      */
-    public function destroy($id): JsonResponse
+    public function destroy($moduleId,$id): JsonResponse
     {
+
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
         // Check permission
         $user = Auth::user();
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {

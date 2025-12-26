@@ -1,12 +1,10 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\Modules\Sales\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Modules\Sales\Lead;
-use App\Models\Modules\Sales\LeadSource;
-use App\Models\Modules\Sales\LeadStatus;
-use App\Models\User;
+use App\Models\Modules\Module;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,8 +16,14 @@ class LeadController extends Controller
     /**
      * Get all leads with filters and search
      */
-    public function index(Request $request): JsonResponse
+    public function index($moduleId, Request $request): JsonResponse
     {
+        // Verify module exists
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
         $perPage = $request->query('per_page', 15);
         $search = $request->query('search');
         $statusId = $request->query('status_id');
@@ -27,11 +31,13 @@ class LeadController extends Controller
         $assignedTo = $request->query('assigned_to');
         $priority = $request->query('priority');
         $isConverted = $request->query('is_converted');
-        $moduleId = $request->query('module_id');
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
 
         $user = Auth::user();
 
-        $query = Lead::with(['source', 'status', 'assignedUser', 'creator', 'module']);
+        $query = Lead::with(['source', 'status', 'assignedUser', 'creator', 'module'])
+            ->where('module_id', $moduleId);
 
         // If not owner/admin, only show leads assigned to user or created by user
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
@@ -55,7 +61,11 @@ class LeadController extends Controller
         }
 
         if ($assignedTo) {
-            $query->where('assigned_to', $assignedTo);
+            if ($assignedTo === 'unassigned') {
+                $query->whereNull('assigned_to');
+            } else {
+                $query->where('assigned_to', $assignedTo);
+            }
         }
 
         if ($priority) {
@@ -66,8 +76,12 @@ class LeadController extends Controller
             $query->where('is_converted', filter_var($isConverted, FILTER_VALIDATE_BOOLEAN));
         }
 
-        if ($moduleId) {
-            $query->where('module_id', $moduleId);
+        if ($startDate) {
+            $query->whereDate('created_at', '>=', $startDate);
+        }
+
+        if ($endDate) {
+            $query->whereDate('created_at', '<=', $endDate);
         }
 
         $leads = $query->latest()->paginate($perPage);
@@ -81,28 +95,54 @@ class LeadController extends Controller
     /**
      * Create a new lead
      */
-    public function store(Request $request): JsonResponse
+    public function store($moduleId, Request $request): JsonResponse
     {
+        // Verify module exists
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
         $validator = Validator::make($request->all(), [
+            // Basic Info
             'name' => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['required', 'string', 'max:20'],
-            'company' => ['nullable', 'string', 'max:255'],
             'position' => ['nullable', 'string', 'max:100'],
-            'city' => ['nullable', 'string', 'max:100'],
-            'state' => ['nullable', 'string', 'max:100'],
-            'country' => ['nullable', 'string', 'max:100'],
-            'address' => ['nullable', 'string', 'max:500'],
-            'zip_code' => ['nullable', 'string', 'max:20'],
+
+            // Company Info
+            'company' => ['nullable', 'string', 'max:255'],
+            'company_phone' => ['nullable', 'string', 'max:20'],
+            'company_email' => ['nullable', 'email', 'max:255'],
             'website' => ['nullable', 'url', 'max:255'],
-            'needs' => ['nullable', 'string'],
-            'lead_value' => ['nullable', 'numeric', 'min:0'],
-            'priority' => ['nullable', 'in:low,medium,high'],
+            'address' => ['nullable', 'string'],
+
+            // Lead Details
+            'ask' => ['nullable', 'string', 'max:500'],
+            'service' => ['nullable', 'string'],
+            'description' => ['nullable', 'string'],
+            'value' => ['nullable', 'numeric', 'min:0'],
+
+            // Campaign & Source
+            'campaign_id' => ['nullable', 'string', 'max:100'],
             'source_id' => ['required', 'exists:lead_sources,id'],
+
+            // Status & Stage
             'status_id' => ['required', 'exists:lead_statuses,id'],
+            'priority' => ['nullable', 'in:low,medium,high'],
+
+            // Assignment
             'assigned_to' => ['nullable', 'exists:users,id'],
-            'module_id' => ['nullable', 'exists:modules,id'],
-            'notes' => ['nullable', 'string'],
+
+            // Social Media
+            'instagram' => ['nullable', 'string', 'max:255'],
+            'facebook' => ['nullable', 'string', 'max:255'],
+            'tiktok' => ['nullable', 'string', 'max:255'],
+            'snapchat' => ['nullable', 'string', 'max:255'],
+            'linkedin' => ['nullable', 'string', 'max:255'],
+            'youtube' => ['nullable', 'string', 'max:255'],
+
+            // Custom
             'custom_fields' => ['nullable', 'array'],
         ]);
 
@@ -115,6 +155,7 @@ class LeadController extends Controller
 
         $data = $validator->validated();
         $data['created_by'] = Auth::id();
+        $data['module_id'] = $moduleId;
         $data['priority'] = $data['priority'] ?? 'medium';
 
         $lead = Lead::create($data);
@@ -122,18 +163,36 @@ class LeadController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Lead created successfully',
-            'data' => $lead->load(['source', 'status', 'assignedUser', 'creator']),
+            'data' => $lead->load(['source', 'status', 'assignedUser', 'creator', 'module']),
         ], 201);
     }
 
     /**
-     * Get a specific lead
+     * Get a specific lead (Profile View)
      */
-    public function show($id): JsonResponse
+    public function show($moduleId, $leadId): JsonResponse
     {
+        // Verify module exists
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
         $user = Auth::user();
 
-        $lead = Lead::with(['source', 'status', 'assignedUser', 'creator', 'module'])->find($id);
+        $lead = Lead::with([
+            'source',
+            'status',
+            'assignedUser',
+            'creator',
+            'module',
+            'contracts',
+            'activityLogs' => function($query) {
+                $query->latest()->limit(10);
+            }
+        ])
+        ->where('module_id', $moduleId)
+        ->find($leadId);
 
         if (!$lead) {
             return response()->json([
@@ -161,11 +220,17 @@ class LeadController extends Controller
     /**
      * Update a lead
      */
-    public function update(Request $request, $id): JsonResponse
+    public function update($moduleId, Request $request, $leadId): JsonResponse
     {
+        // Verify module exists
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
         $user = Auth::user();
 
-        $lead = Lead::find($id);
+        $lead = Lead::where('module_id', $moduleId)->find($leadId);
 
         if (!$lead) {
             return response()->json([
@@ -185,25 +250,45 @@ class LeadController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
+            // Basic Info
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['sometimes', 'required', 'string', 'max:20'],
-            'company' => ['nullable', 'string', 'max:255'],
             'position' => ['nullable', 'string', 'max:100'],
-            'city' => ['nullable', 'string', 'max:100'],
-            'state' => ['nullable', 'string', 'max:100'],
-            'country' => ['nullable', 'string', 'max:100'],
-            'address' => ['nullable', 'string', 'max:500'],
-            'zip_code' => ['nullable', 'string', 'max:20'],
+
+            // Company Info
+            'company' => ['nullable', 'string', 'max:255'],
+            'company_phone' => ['nullable', 'string', 'max:20'],
+            'company_email' => ['nullable', 'email', 'max:255'],
             'website' => ['nullable', 'url', 'max:255'],
-            'needs' => ['nullable', 'string'],
-            'lead_value' => ['nullable', 'numeric', 'min:0'],
-            'priority' => ['nullable', 'in:low,medium,high'],
+            'address' => ['nullable', 'string'],
+
+            // Lead Details
+            'ask' => ['nullable', 'string', 'max:500'],
+            'service' => ['nullable', 'string'],
+            'description' => ['nullable', 'string'],
+            'value' => ['nullable', 'numeric', 'min:0'],
+
+            // Campaign & Source
+            'campaign_id' => ['nullable', 'string', 'max:100'],
             'source_id' => ['sometimes', 'required', 'exists:lead_sources,id'],
+
+            // Status & Stage
             'status_id' => ['sometimes', 'required', 'exists:lead_statuses,id'],
+            'priority' => ['nullable', 'in:low,medium,high'],
+
+            // Assignment
             'assigned_to' => ['nullable', 'exists:users,id'],
-            'module_id' => ['nullable', 'exists:modules,id'],
-            'notes' => ['nullable', 'string'],
+
+            // Social Media
+            'instagram' => ['nullable', 'string', 'max:255'],
+            'facebook' => ['nullable', 'string', 'max:255'],
+            'tiktok' => ['nullable', 'string', 'max:255'],
+            'snapchat' => ['nullable', 'string', 'max:255'],
+            'linkedin' => ['nullable', 'string', 'max:255'],
+            'youtube' => ['nullable', 'string', 'max:255'],
+
+            // Custom
             'custom_fields' => ['nullable', 'array'],
         ]);
 
@@ -219,15 +304,21 @@ class LeadController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Lead updated successfully',
-            'data' => $lead->fresh(['source', 'status', 'assignedUser', 'creator']),
+            'data' => $lead->fresh(['source', 'status', 'assignedUser', 'creator', 'module']),
         ]);
     }
 
     /**
      * Delete a lead
      */
-    public function destroy($id): JsonResponse
+    public function destroy($moduleId, $leadId): JsonResponse
     {
+        // Verify module exists
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
         $user = Auth::user();
 
         // Only owner/admin can delete
@@ -238,7 +329,7 @@ class LeadController extends Controller
             ], 403);
         }
 
-        $lead = Lead::find($id);
+        $lead = Lead::where('module_id', $moduleId)->find($leadId);
 
         if (!$lead) {
             return response()->json([
@@ -256,21 +347,27 @@ class LeadController extends Controller
     }
 
     /**
-     * Assign lead to a user
+     * Reassign lead to another user
      */
-    public function assign(Request $request, $id): JsonResponse
+    public function reassign($moduleId, Request $request, $leadId): JsonResponse
     {
+        // Verify module exists
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
         $user = Auth::user();
 
-        // Only owner/admin can assign
+        // Only owner/admin can reassign
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to assign leads',
+                'message' => 'You do not have permission to reassign leads',
             ], 403);
         }
 
-        $lead = Lead::find($id);
+        $lead = Lead::where('module_id', $moduleId)->find($leadId);
 
         if (!$lead) {
             return response()->json([
@@ -290,23 +387,89 @@ class LeadController extends Controller
             ], 422);
         }
 
+        $oldAssignee = $lead->assignedUser?->name ?? 'Unassigned';
         $lead->update(['assigned_to' => $request->assigned_to]);
+        $newAssignee = $lead->fresh()->assignedUser->name;
+
+        // Log activity
+        \App\Models\Modules\Sales\ActivityLog::create([
+            'lead_id' => $lead->id,
+            'user_id' => Auth::id(),
+            'user_name' => Auth::user()->name,
+            'activity' => "Lead reassigned from {$oldAssignee} to {$newAssignee}",
+            'details' => '',
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Lead assigned successfully',
+            'message' => 'Lead reassigned successfully',
             'data' => $lead->fresh(['assignedUser']),
+        ]);
+    }
+
+    /**
+     * Dismiss (unassign) lead
+     */
+    public function dismiss($moduleId, $leadId): JsonResponse
+    {
+        // Verify module exists
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
+        $user = Auth::user();
+
+        // Only owner/admin can dismiss
+        if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to dismiss leads',
+            ], 403);
+        }
+
+        $lead = Lead::where('module_id', $moduleId)->find($leadId);
+
+        if (!$lead) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Lead not found',
+            ], 404);
+        }
+
+        $oldAssignee = $lead->assignedUser?->name ?? 'Unassigned';
+        $lead->update(['assigned_to' => null]);
+
+        // Log activity
+        \App\Models\Modules\Sales\ActivityLog::create([
+            'lead_id' => $lead->id,
+            'user_id' => Auth::id(),
+            'user_name' => Auth::user()->name,
+            'activity' => "Lead dismissed from {$oldAssignee}",
+            'details' => '',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Lead dismissed successfully',
+            'data' => $lead->fresh(),
         ]);
     }
 
     /**
      * Convert lead (mark as won/converted)
      */
-    public function convert($id): JsonResponse
+    public function convert($moduleId, $leadId): JsonResponse
     {
+        // Verify module exists
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
         $user = Auth::user();
 
-        $lead = Lead::find($id);
+        $lead = Lead::where('module_id', $moduleId)->find($leadId);
 
         if (!$lead) {
             return response()->json([
@@ -334,6 +497,15 @@ class LeadController extends Controller
 
         $lead->markAsConverted();
 
+        // Log activity
+        \App\Models\Modules\Sales\ActivityLog::create([
+            'lead_id' => $lead->id,
+            'user_id' => Auth::id(),
+            'user_name' => Auth::user()->name,
+            'activity' => "Lead marked as converted",
+            'details' => '',
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => 'Lead converted successfully',
@@ -342,13 +514,18 @@ class LeadController extends Controller
     }
 
     /**
-     * Batch delete leads
+     * Batch operations
      */
-    public function batchDelete(Request $request): JsonResponse
+    public function batchDelete($moduleId, Request $request): JsonResponse
     {
+        // Verify module exists
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
         $user = Auth::user();
 
-        // Only owner/admin can batch delete
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
             return response()->json([
                 'success' => false,
@@ -368,7 +545,9 @@ class LeadController extends Controller
             ], 422);
         }
 
-        Lead::whereIn('id', $request->ids)->delete();
+        Lead::where('module_id', $moduleId)
+            ->whereIn('id', $request->ids)
+            ->delete();
 
         return response()->json([
             'success' => true,
@@ -376,18 +555,20 @@ class LeadController extends Controller
         ]);
     }
 
-    /**
-     * Batch assign leads
-     */
-    public function batchAssign(Request $request): JsonResponse
+    public function batchReassign($moduleId, Request $request): JsonResponse
     {
+        // Verify module exists
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
         $user = Auth::user();
 
-        // Only owner/admin can batch assign
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to assign leads',
+                'message' => 'You do not have permission to reassign leads',
             ], 403);
         }
 
@@ -404,23 +585,30 @@ class LeadController extends Controller
             ], 422);
         }
 
-        Lead::whereIn('id', $request->lead_ids)
+        Lead::where('module_id', $moduleId)
+            ->whereIn('id', $request->lead_ids)
             ->update(['assigned_to' => $request->assigned_to]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Leads assigned successfully',
+            'message' => 'Leads reassigned successfully',
         ]);
     }
 
     /**
      * Get lead statistics
      */
-    public function stats(): JsonResponse
+    public function stats($moduleId): JsonResponse
     {
+        // Verify module exists
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
         $user = Auth::user();
 
-        $query = Lead::query();
+        $query = Lead::where('module_id', $moduleId);
 
         // If not owner/admin, only show stats for user's leads
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
@@ -432,7 +620,7 @@ class LeadController extends Controller
 
         $totalLeads = $query->count();
         $convertedLeads = (clone $query)->where('is_converted', true)->count();
-        $totalValue = (clone $query)->sum('lead_value');
+        $totalValue = (clone $query)->sum('value');
         $averageValue = $totalLeads > 0 ? $totalValue / $totalLeads : 0;
 
         // Leads by status

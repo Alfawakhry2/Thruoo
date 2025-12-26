@@ -108,7 +108,7 @@ public function getCompanyInfo(): JsonResponse
             'snapchat' => $tenant->settings['snapchat'] ?? null,
             'tiktok' => $tenant->settings['tiktok'] ?? null,
             'youtube' => $tenant->settings['youtube'] ?? null,
-            'logo' => $tenant->logo,
+            'logo' => $tenant->logo_url,
         ],
     ]);
 }

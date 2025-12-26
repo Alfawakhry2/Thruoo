@@ -5,28 +5,20 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\Landlord\Tenant;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Artisan;
 
 class MigrateAllTenants extends Command
 {
-    /**
-     * The name and signature of the console command.
-     */
     protected $signature = 'tenants:migrate {--fresh : Drop all tables and re-run all migrations} {--seed : Seed the database after migrating}';
-
-    /**
-     * The console command description.
-     */
     protected $description = 'Run migrations for all tenants';
 
-    /**
-     * Execute the console command.
-     */
     public function handle()
     {
         $fresh = $this->option('fresh');
         $seed = $this->option('seed');
 
-        // Get all active tenants from landlord database
+        // IMPORTANT: Get tenants from landlord database explicitly
         $tenants = Tenant::on('mysql')
             ->where('status', 'active')
             ->get();
@@ -44,29 +36,53 @@ class MigrateAllTenants extends Command
 
         foreach ($tenants as $tenant) {
             $this->info("Processing tenant: {$tenant->name} ({$tenant->subdomain})");
-            
+            $this->info("Database: {$tenant->database}");
+
             try {
-                // Make tenant current
-                $tenant->makeCurrent();
+                // CRITICAL: Configure tenant connection properly
+                Config::set('database.connections.tenant.database', $tenant->database);
+
+                // Purge and reconnect
+                DB::purge('tenant');
+                DB::reconnect('tenant');
+
+                // Test connection
+                try {
+                    DB::connection('tenant')->getPdo();
+                    $this->info("✓ Connected to database: {$tenant->database}");
+                } catch (\Exception $e) {
+                    throw new \Exception("Failed to connect to tenant database: " . $e->getMessage());
+                }
 
                 // Run migrations
                 if ($fresh) {
-                    $this->call('migrate:fresh', [
+                    $this->info("Running fresh migrations...");
+                    Artisan::call('migrate:fresh', [
+                        '--database' => 'tenant',
                         '--path' => 'database/migrations/tenant',
                         '--force' => true,
                     ]);
                 } else {
-                    $this->call('migrate', [
+                    $this->info("Running migrations...");
+                    Artisan::call('migrate', [
+                        '--database' => 'tenant',
                         '--path' => 'database/migrations/tenant',
                         '--force' => true,
                     ]);
                 }
 
+                // Get migration output
+                $output = Artisan::output();
+                $this->line($output);
+
                 // Run seeder if requested
                 if ($seed) {
-                    $this->call('db:seed', [
+                    $this->info("Running seeders...");
+                    Artisan::call('db:seed', [
+                        '--database' => 'tenant',
                         '--force' => true,
                     ]);
+                    $this->line(Artisan::output());
                 }
 
                 $this->info("✅ Migration completed for: {$tenant->name}");
@@ -75,14 +91,16 @@ class MigrateAllTenants extends Command
             } catch (\Exception $e) {
                 $this->error("❌ Migration failed for: {$tenant->name}");
                 $this->error("Error: " . $e->getMessage());
+                $this->error("Trace: " . $e->getTraceAsString());
                 $failCount++;
             }
 
             $this->newLine();
         }
 
-        // Forget current tenant
-        Tenant::forgetCurrent();
+        // Reset to default connection
+        Config::set('database.default', 'mysql');
+        DB::purge('tenant');
 
         // Summary
         $this->newLine();

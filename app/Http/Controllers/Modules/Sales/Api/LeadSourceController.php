@@ -11,11 +11,17 @@ use Illuminate\Support\Facades\Validator;
 
 class LeadSourceController extends Controller
 {
+
     /**
      * Get all lead sources with pagination
      */
-    public function index(Request $request): JsonResponse
+    public function index($moduleId , Request $request): JsonResponse
     {
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
+
         $perPage = $request->query('per_page', 15);
         $status = $request->query('status'); // active, inactive, or all
 
@@ -36,8 +42,12 @@ class LeadSourceController extends Controller
     /**
      * Get all lead sources without pagination
      */
-    public function all(Request $request): JsonResponse
+    public function all( $moduleId , Request $request): JsonResponse
     {
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
         $status = $request->query('status', 'active');
 
         $query = LeadSource::query();
@@ -57,8 +67,12 @@ class LeadSourceController extends Controller
     /**
      * Create a new lead source
      */
-    public function store(Request $request): JsonResponse
+    public function store($moduleId ,Request $request): JsonResponse
     {
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
         // Check permission
         $user = Auth::user();
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
@@ -98,8 +112,12 @@ class LeadSourceController extends Controller
     /**
      * Get a specific lead source
      */
-    public function show($id): JsonResponse
+    public function show($moduleId,$id): JsonResponse
     {
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
         $source = LeadSource::with(['creator', 'leads'])->find($id);
 
         if (!$source) {
@@ -118,8 +136,12 @@ class LeadSourceController extends Controller
     /**
      * Update a lead source
      */
-    public function update(Request $request, $id): JsonResponse
+    public function update($moduleId,Request $request, $id): JsonResponse
     {
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
         // Check permission
         $user = Auth::user();
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
@@ -165,8 +187,12 @@ class LeadSourceController extends Controller
     /**
      * Delete a lead source
      */
-    public function destroy($id): JsonResponse
+    public function destroy($moduleId,$id): JsonResponse
     {
+        $module = \App\Models\Modules\Module::find($moduleId);
+        if (!$module) {
+            return response()->json(['success' => false, 'message' => 'Module not found'], 404);
+        }
         // Check permission
         $user = Auth::user();
         if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
