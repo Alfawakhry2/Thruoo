@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Sales\Products\Api;
+namespace App\Http\Controllers\Modules\Sales\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Modules\Module;
@@ -87,12 +87,12 @@ class PaymentMethodController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'type' => ['required', 'in:bank_transfer,cash,credit_card,paypal,other'],
+            'type' => ['nullable', 'in:bank_transfer,cash,credit_card,paypal,other'],
             'name' => ['required', 'string', 'max:255'],
             'name_ar' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'bank_name' => ['nullable', 'string', 'max:255'],
-            'account_number' => ['nullable', 'string', 'max:100'],
+            'bank_name' => ['required', 'string', 'max:255'],
+            'account_number' => ['required', 'string', 'max:100'],
             'account_holder' => ['nullable', 'string', 'max:255'],
             'iban' => ['nullable', 'string', 'max:34'],
             'swift_code' => ['nullable', 'string', 'max:11'],

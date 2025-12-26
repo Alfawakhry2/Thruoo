@@ -4,6 +4,8 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Config;
 use Symfony\Component\HttpFoundation\Response;
 use Spatie\Multitenancy\Models\Tenant as TenantModel;
 
@@ -38,6 +40,18 @@ class ResolveTenant
         // Explicitly make tenant current to ensure database connection is switched
         // This is important for Sanctum to find tokens in the correct database
         $tenant->makeCurrent();
+
+        $currentConnection = Config::get('database.default');
+        $tenantDatabase = Config::get('database.connections.tenant.database');
+
+        // Log for debugging (optional - remove in production)
+        Log::info('Tenant resolved', [
+            'tenant_id' => $tenant->id,
+            'tenant_subdomain' => $tenant->subdomain,
+            'tenant_database' => $tenant->database,
+            'current_connection' => $currentConnection,
+            'tenant_connection_database' => $tenantDatabase,
+        ]);
 
         return $next($request);
     }

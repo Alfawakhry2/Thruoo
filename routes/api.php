@@ -1,10 +1,13 @@
 <?php
 
 use Illuminate\Http\Request;
+use App\Models\Modules\Module;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Modules\Sales\Api\TaxController;
 use App\Http\Controllers\Modules\Sales\Api\LeadController;
 use App\Http\Controllers\Modules\Sales\Api\TeamController;
+use App\Http\Controllers\Modules\Sales\Api\BranchController;
 use App\Http\Controllers\Modules\Sales\Api\ModuleController;
 use App\Http\Controllers\Modules\Sales\Api\TargetController;
 use App\Http\Controllers\Modules\Sales\Api\VendorController;
@@ -13,15 +16,16 @@ use App\Http\Controllers\Modules\Sales\Api\CategoryController;
 use App\Http\Controllers\Modules\Sales\Api\ContractController;
 use App\Http\Controllers\Modules\Sales\Api\CurrencyController;
 use App\Http\Controllers\Modules\Sales\Api\AttributeController;
+use App\Http\Controllers\Modules\Sales\Api\DepartmentController;
 use App\Http\Controllers\Modules\Sales\Api\LeadSourceController;
 use App\Http\Controllers\Modules\Sales\Api\LeadStatusController;
 use App\Http\Controllers\Modules\Sales\Api\TenantAuthController;
+use App\Http\Controllers\Modules\Sales\Api\PaymentMethodController;
 use App\Http\Controllers\Modules\Sales\Api\ProductVariantController;
 use App\Http\Controllers\Modules\Sales\Api\UserInvitationController;
-use App\Http\Controllers\Sales\Products\Api\PaymentMethodController;
+use App\Http\Controllers\Modules\Sales\Api\ContractTemplateController;
 use App\Http\Controllers\Modules\Sales\Api\TenantRegistrationController;
 use App\Http\Controllers\Modules\Sales\Api\Account\AccountSettingsController;
-
 
 /*
 |--------------------------------------------------------------------------
@@ -56,7 +60,11 @@ Route::post('/tenants/register', [TenantRegistrationController::class, 'register
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['resolve.tenant', 'ensure.subscription'])->group(function () {
+Route::middleware([
+    'resolve.tenant',
+    'ensure.subscription'
+])->group(function () {
+
     // Authentication routes
     Route::post('/auth/login', [TenantAuthController::class, 'login']);
 
@@ -116,12 +124,12 @@ Route::middleware(['resolve.tenant', 'ensure.subscription'])->group(function () 
             Route::post('/{id}/toggle-status', [ModuleController::class, 'toggleStatus']);
         });
 
-        // ========================================
-        // LEADS SYSTEM ROUTES WITH MODULE PREFIX
-        // ========================================
 
-        Route::prefix('modules/{moduleId}')->group(function () {
+        Route::prefix('modules/{moduleName}')->group(function () {
 
+            #################
+            #### Settings ###
+            #################
             // Lead Sources (Everyone can view, Owner/Admin can manage)
             Route::prefix('lead-sources')->group(function () {
                 Route::get('/', [LeadSourceController::class, 'index']);
@@ -146,8 +154,67 @@ Route::middleware(['resolve.tenant', 'ensure.subscription'])->group(function () 
                 Route::post('/batch-delete', [LeadStatusController::class, 'batchDelete']);
                 Route::post('/{id}/toggle-status', [LeadStatusController::class, 'toggleStatus']);
             });
-
-            // Leads Management
+            //branches
+            Route::prefix('branches')->group(function () {
+                Route::get('/', [BranchController::class, 'index']);
+                Route::get('/all', [BranchController::class, 'all']);
+                Route::get('/{id}', [BranchController::class, 'show']);
+                Route::post('/', [BranchController::class, 'store']);
+                Route::put('/{id}', [BranchController::class, 'update']);
+                Route::delete('/{id}', [BranchController::class, 'destroy']);
+                Route::post('/batch-delete', [BranchController::class, 'batchDelete']);
+                Route::post('/{id}/toggle-status', [BranchController::class, 'toggleStatus']);
+            });
+            //departments
+            Route::prefix('departments')->group(function () {
+                Route::get('/', [DepartmentController::class, 'index']);
+                Route::get('/all', [DepartmentController::class, 'all']);
+                Route::get('/{id}', [DepartmentController::class, 'show']);
+                Route::post('/', [DepartmentController::class, 'store']);
+                Route::put('/{id}', [DepartmentController::class, 'update']);
+                Route::delete('/{id}', [DepartmentController::class, 'destroy']);
+                Route::post('/batch-delete', [DepartmentController::class, 'batchDelete']);
+                Route::post('/{id}/toggle-status', [DepartmentController::class, 'toggleStatus']);
+            });
+            //contract Templetes
+            Route::prefix('contract-templates')->group(function () {
+                Route::get('/', [ContractTemplateController::class, 'index']);
+                Route::post('/', [ContractTemplateController::class, 'store']);
+                Route::get('/{id}', [ContractTemplateController::class, 'show']);
+                Route::put('/{id}', [ContractTemplateController::class, 'update']);
+                Route::delete('/{id}', [ContractTemplateController::class, 'destroy']);
+            });
+            // Taxes
+            Route::prefix('taxes')->group(function () {
+                Route::get('/', [TaxController::class, 'index']);
+                Route::get('/all', [TaxController::class, 'all']);
+                Route::post('/', [TaxController::class, 'store']);
+                Route::get('/{taxId}', [TaxController::class, 'show']);
+                Route::put('/{taxId}', [TaxController::class, 'update']);
+                Route::delete('/{taxId}', [TaxController::class, 'destroy']);
+            });
+            // Currencies
+            Route::prefix('currencies')->group(function () {
+                Route::get('/', [CurrencyController::class, 'index']);
+                Route::get('/all', [CurrencyController::class, 'all']);
+                Route::post('/', [CurrencyController::class, 'store']);
+                Route::get('/{currencyId}', [CurrencyController::class, 'show']);
+                Route::put('/{currencyId}', [CurrencyController::class, 'update']);
+                Route::delete('/{currencyId}', [CurrencyController::class, 'destroy']);
+                Route::post('/convert', [CurrencyController::class, 'convert']);
+            });
+            // Payment Methods
+            Route::prefix('payment-methods')->group(function () {
+                Route::get('/', [PaymentMethodController::class, 'index']);
+                Route::get('/all', [PaymentMethodController::class, 'all']);
+                Route::post('/', [PaymentMethodController::class, 'store']);
+                Route::get('/{paymentMethodId}', [PaymentMethodController::class, 'show']);
+                Route::put('/{paymentMethodId}', [PaymentMethodController::class, 'update']);
+                Route::delete('/{paymentMethodId}', [PaymentMethodController::class, 'destroy']);
+            });
+            #################
+            #### Sales ######
+            #################
             // Leads Management
             Route::prefix('leads')->group(function () {
                 // Statistics
@@ -253,26 +320,6 @@ Route::middleware(['resolve.tenant', 'ensure.subscription'])->group(function () 
             });
         });
 
-        // Taxes
-        Route::prefix('taxes')->group(function () {
-            Route::get('/', [TaxController::class, 'index']);
-            Route::get('/all', [TaxController::class, 'all']);
-            Route::post('/', [TaxController::class, 'store']);
-            Route::get('/{taxId}', [TaxController::class, 'show']);
-            Route::put('/{taxId}', [TaxController::class, 'update']);
-            Route::delete('/{taxId}', [TaxController::class, 'destroy']);
-        });
-
-        // Currencies
-        Route::prefix('currencies')->group(function () {
-            Route::get('/', [CurrencyController::class, 'index']);
-            Route::get('/all', [CurrencyController::class, 'all']);
-            Route::post('/', [CurrencyController::class, 'store']);
-            Route::get('/{currencyId}', [CurrencyController::class, 'show']);
-            Route::put('/{currencyId}', [CurrencyController::class, 'update']);
-            Route::delete('/{currencyId}', [CurrencyController::class, 'destroy']);
-            Route::post('/convert', [CurrencyController::class, 'convert']);
-        });
 
         // Vendors
         Route::prefix('vendors')->group(function () {
@@ -299,15 +346,7 @@ Route::middleware(['resolve.tenant', 'ensure.subscription'])->group(function () 
             Route::delete('/{attributeId}/values/{valueId}', [AttributeController::class, 'deleteValue']);
         });
 
-        // Payment Methods
-        Route::prefix('payment-methods')->group(function () {
-            Route::get('/', [PaymentMethodController::class, 'index']);
-            Route::get('/all', [PaymentMethodController::class, 'all']);
-            Route::post('/', [PaymentMethodController::class, 'store']);
-            Route::get('/{paymentMethodId}', [PaymentMethodController::class, 'show']);
-            Route::put('/{paymentMethodId}', [PaymentMethodController::class, 'update']);
-            Route::delete('/{paymentMethodId}', [PaymentMethodController::class, 'destroy']);
-        });
+
 
 
 
