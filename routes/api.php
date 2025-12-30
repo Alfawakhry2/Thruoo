@@ -7,11 +7,14 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Modules\Sales\Api\TaxController;
 use App\Http\Controllers\Modules\Sales\Api\LeadController;
 use App\Http\Controllers\Modules\Sales\Api\TeamController;
+use App\Http\Controllers\Modules\Sales\Api\UnitController;
+use App\Http\Controllers\Modules\Sales\Api\UserController;
 use App\Http\Controllers\Modules\Sales\Api\BranchController;
 use App\Http\Controllers\Modules\Sales\Api\ModuleController;
 use App\Http\Controllers\Modules\Sales\Api\TargetController;
 use App\Http\Controllers\Modules\Sales\Api\VendorController;
 use App\Http\Controllers\Modules\Sales\Api\ProductController;
+use App\Http\Controllers\Modules\Sales\Api\ServiceController;
 use App\Http\Controllers\Modules\Sales\Api\CategoryController;
 use App\Http\Controllers\Modules\Sales\Api\ContractController;
 use App\Http\Controllers\Modules\Sales\Api\CurrencyController;
@@ -22,6 +25,7 @@ use App\Http\Controllers\Modules\Sales\Api\LeadStatusController;
 use App\Http\Controllers\Modules\Sales\Api\TenantAuthController;
 use App\Http\Controllers\Modules\Sales\Api\PaymentMethodController;
 use App\Http\Controllers\Modules\Sales\Api\ProductVariantController;
+use App\Http\Controllers\Modules\Sales\Api\RolePermissionController;
 use App\Http\Controllers\Modules\Sales\Api\UserInvitationController;
 use App\Http\Controllers\Modules\Sales\Api\ContractTemplateController;
 use App\Http\Controllers\Modules\Sales\Api\TenantRegistrationController;
@@ -108,6 +112,7 @@ Route::middleware([
             Route::post('/{userId}/resend', [UserInvitationController::class, 'resendInvitation']);
             Route::delete('/{userId}', [UserInvitationController::class, 'cancelInvitation']);
         });
+
 
         // ========================================
         // LEADS SYSTEM ROUTES
@@ -243,108 +248,189 @@ Route::middleware([
                     Route::delete('/{contractId}', [ContractController::class, 'destroy']);
                 });
             });
-        });
 
+            //User Management
+            // User/Staff CRUD Management (Owner/Admin only for most operations)
+            Route::prefix('users')->group(function () {
+                // List all users with pagination and filters
+                Route::get('/', [UserController::class, 'index']);
 
+                // Get all active users (for dropdowns)
+                Route::get('/all', [UserController::class, 'all']);
 
+                // Get available roles
+                Route::get('/roles', [UserController::class, 'getRoles']);
 
-        // Teams Management
-        Route::prefix('teams')->group(function () {
-            // CRUD operations (Owner/Admin only)
-            Route::get('/', [TeamController::class, 'index']);
-            Route::post('/', [TeamController::class, 'store']);
-            Route::get('/{teamId}', [TeamController::class, 'show']);
-            Route::put('/{teamId}', [TeamController::class, 'update']);
-            Route::delete('/{teamId}', [TeamController::class, 'destroy']);
+                // Create new staff member (direct creation)
+                Route::post('/', [UserController::class, 'store']);
 
-            // Team members management
-            Route::post('/{teamId}/members', [TeamController::class, 'addMember']);
-            Route::delete('/{teamId}/members/{userId}', [TeamController::class, 'removeMember']);
+                // Get specific user
+                Route::get('/{userId}', [UserController::class, 'show']);
 
-            // Team performance
-            Route::get('/{teamId}/performance', [TeamController::class, 'performance']);
+                // Update user
+                Route::put('/{userId}', [UserController::class, 'update']);
+                Route::patch('/{userId}', [UserController::class, 'update']);
 
-            // My teams (current user)
-            Route::get('/my-teams', [TeamController::class, 'myTeams']);
-        });
+                // Delete user
+                Route::delete('/{userId}', [UserController::class, 'destroy']);
 
-        // Targets Management
-        Route::prefix('targets')->group(function () {
-            // Statistics
-            Route::get('/stats', [TargetController::class, 'stats']);
+                // Toggle user status (activate/suspend)
+                Route::post('/{userId}/toggle-status', [UserController::class, 'toggleStatus']);
+            });
+            // Teams Management
+            Route::prefix('teams')->group(function () {
+                // CRUD operations (Owner/Admin only)
+                Route::get('/', [TeamController::class, 'index']);
+                Route::post('/', [TeamController::class, 'store']);
+                Route::get('/{teamId}', [TeamController::class, 'show']);
+                Route::put('/{teamId}', [TeamController::class, 'update']);
+                Route::delete('/{teamId}', [TeamController::class, 'destroy']);
 
-            // My targets (current user)
-            Route::get('/my-targets', [TargetController::class, 'myTargets']);
+                // Team members management
+                Route::post('/{teamId}/members', [TeamController::class, 'addMember']);
+                Route::delete('/{teamId}/members/{userId}', [TeamController::class, 'removeMember']);
 
-            // CRUD operations (Owner/Admin only)
-            Route::get('/', [TargetController::class, 'index']);
-            Route::post('/', [TargetController::class, 'store']);
-            Route::get('/{targetId}', [TargetController::class, 'show']);
-            Route::put('/{targetId}', [TargetController::class, 'update']);
-            Route::delete('/{targetId}', [TargetController::class, 'destroy']);
+                // Team performance
+                Route::get('/{teamId}/performance', [TeamController::class, 'performance']);
 
-            // Refresh progress
-            Route::post('/{targetId}/refresh', [TargetController::class, 'refreshProgress']);
-        });
+                // My teams (current user)
+                Route::get('/my-teams', [TeamController::class, 'myTeams']);
+            });
 
-        // Categories
-        Route::prefix('categories')->group(function () {
-            Route::get('/', [CategoryController::class, 'index']);
-            Route::get('/all', [CategoryController::class, 'all']);
-            Route::post('/', [CategoryController::class, 'store']);
-            Route::get('/{categoryId}', [CategoryController::class, 'show']);
-            Route::put('/{categoryId}', [CategoryController::class, 'update']);
-            Route::delete('/{categoryId}', [CategoryController::class, 'destroy']);
-            Route::post('/batch-delete', [CategoryController::class, 'batchDelete']);
-            Route::post('/{categoryId}/assign-teams', [CategoryController::class, 'assignTeams']);
-        });
+            //Role And Permissions
+            // Roles Management
+            Route::prefix('roles')->group(function () {
+                // Get all roles with permissions
+                Route::get('/', [RolePermissionController::class, 'getRoles']);
 
-        // Products
-        Route::prefix('products')->group(function () {
-            Route::get('/', [ProductController::class, 'index']);
-            Route::post('/', [ProductController::class, 'store']);
-            Route::get('/{productId}', [ProductController::class, 'show']);
-            Route::put('/{productId}', [ProductController::class, 'update']);
-            Route::delete('/{productId}', [ProductController::class, 'destroy']);
-            Route::post('/{productId}/toggle-status', [ProductController::class, 'toggleStatus']);
-            Route::post('/batch-delete', [ProductController::class, 'batchDelete']);
+                // Get specific role
+                Route::get('/{roleId}', [RolePermissionController::class, 'getRole']);
 
-            // Product Variants
-            Route::prefix('{productId}/variants')->group(function () {
-                Route::get('/', [ProductVariantController::class, 'index']);
-                Route::post('/', [ProductVariantController::class, 'store']);
-                Route::get('/{variantId}', [ProductVariantController::class, 'show']);
-                Route::put('/{variantId}', [ProductVariantController::class, 'update']);
-                Route::delete('/{variantId}', [ProductVariantController::class, 'destroy']);
-                Route::post('/{variantId}/toggle-status', [ProductVariantController::class, 'toggleStatus']);
+                // Update role permissions
+                Route::put('/{roleId}/permissions', [RolePermissionController::class, 'updateRolePermissions']);
+
+                // Get role access details (for UI display)
+                Route::get('/{roleName}/access-details', [RolePermissionController::class, 'getRoleAccessDetails']);
+            });
+
+            // Permissions Management
+            Route::prefix('permissions')->group(function () {
+                // Get all available permissions
+                Route::get('/', [RolePermissionController::class, 'getPermissions']);
+
+                // Toggle single permission for a role
+                Route::post('/toggle', [RolePermissionController::class, 'togglePermission']);
+
+                // Bulk update permissions for multiple roles
+                Route::post('/bulk-update', [RolePermissionController::class, 'bulkUpdatePermissions']);
+            });
+
+            // Targets Management
+            Route::prefix('targets')->group(function () {
+                // Statistics
+                Route::get('/stats', [TargetController::class, 'stats']);
+
+                // My targets (current user)
+                Route::get('/my-targets', [TargetController::class, 'myTargets']);
+
+                // CRUD operations (Owner/Admin only)
+                Route::get('/', [TargetController::class, 'index']);
+                Route::post('/', [TargetController::class, 'store']);
+                Route::get('/{targetId}', [TargetController::class, 'show']);
+                Route::put('/{targetId}', [TargetController::class, 'update']);
+                Route::delete('/{targetId}', [TargetController::class, 'destroy']);
+
+                // Refresh progress
+                Route::post('/{targetId}/refresh', [TargetController::class, 'refreshProgress']);
+            });
+
+            // Categories
+            Route::prefix('categories')->group(function () {
+                Route::get('/', [CategoryController::class, 'index']);
+                Route::get('/all', [CategoryController::class, 'all']);
+                Route::post('/', [CategoryController::class, 'store']);
+                Route::get('/{categoryId}', [CategoryController::class, 'show']);
+                Route::put('/{categoryId}', [CategoryController::class, 'update']);
+                Route::delete('/{categoryId}', [CategoryController::class, 'destroy']);
+                Route::post('/batch-delete', [CategoryController::class, 'batchDelete']);
+                Route::post('/{categoryId}/assign-teams', [CategoryController::class, 'assignTeams']);
+                Route::post('/{categoryId}/toggle-status', [CategoryController::class, 'toggleStatus']);
+            });
+
+            Route::prefix('services')->group(function () {
+                Route::get('/', [ServiceController::class, 'index']);
+                Route::get('/all', [ServiceController::class, 'all']);
+                Route::post('/', [ServiceController::class, 'store']);
+                Route::get('/{id}', [ServiceController::class, 'show']);
+                Route::put('/{id}', [ServiceController::class, 'update']);
+                Route::delete('/{id}', [ServiceController::class, 'destroy']);
+
+                Route::post('/{id}/toggle-status', [ServiceController::class, 'toggleStatus']);
+                Route::post('/batch-delete', [ServiceController::class, 'batchDelete']);
+            });
+            // Products
+            Route::prefix('products')->group(function () {
+                Route::get('/', [ProductController::class, 'index']);
+                Route::post('/', [ProductController::class, 'store']);
+                Route::get('/{productId}', [ProductController::class, 'show']);
+                Route::put('/{productId}', [ProductController::class, 'update']);
+                Route::delete('/{productId}', [ProductController::class, 'destroy']);
+                Route::post('/{productId}/toggle-status', [ProductController::class, 'toggleStatus']);
+                Route::post('/batch-delete', [ProductController::class, 'batchDelete']);
+
+                // Product Variants
+                Route::prefix('{productId}/variants')->group(function () {
+                    Route::get('/', [ProductVariantController::class, 'index']);
+                    Route::post('/', [ProductVariantController::class, 'store']);
+                    Route::get('/{variantId}', [ProductVariantController::class, 'show']);
+                    Route::put('/{variantId}', [ProductVariantController::class, 'update']);
+                    Route::delete('/{variantId}', [ProductVariantController::class, 'destroy']);
+                    Route::post('/{variantId}/toggle-status', [ProductVariantController::class, 'toggleStatus']);
+                });
+            });
+
+            Route::prefix('units')->group(function () {
+                Route::get('/', [UnitController::class, 'index']);
+                Route::get('/all', [UnitController::class, 'all']);
+                Route::get('/{id}', [UnitController::class, 'show']);
+
+                Route::post('/', [UnitController::class, 'store']);
+                Route::put('/{id}', [UnitController::class, 'update']);
+                Route::delete('/{id}', [UnitController::class, 'destroy']);
+
+                Route::post('/batch-delete', [UnitController::class, 'batchDelete']);
+                Route::post('/{id}/toggle-status', [UnitController::class, 'toggleStatus']);
+            });
+
+            // Vendors
+            Route::prefix('vendors')->group(function () {
+                Route::get('/', [VendorController::class, 'index']);
+                Route::get('/all', [VendorController::class, 'all']);
+                Route::post('/', [VendorController::class, 'store']);
+                Route::get('/{vendorId}', [VendorController::class, 'show']);
+                Route::put('/{vendorId}', [VendorController::class, 'update']);
+                Route::delete('/{vendorId}', [VendorController::class, 'destroy']);
+            });
+
+            // Attributes
+            Route::prefix('attributes')->group(function () {
+                Route::get('/', [AttributeController::class, 'index']);
+                Route::get('/all', [AttributeController::class, 'all']);
+                Route::post('/', [AttributeController::class, 'store']);
+                Route::get('/{attributeId}', [AttributeController::class, 'show']);
+                Route::put('/{attributeId}', [AttributeController::class, 'update']);
+                Route::delete('/{attributeId}', [AttributeController::class, 'destroy']);
+
+                // Attribute Values
+                Route::post('/{attributeId}/values', [AttributeController::class, 'addValue']);
+                Route::put('/{attributeId}/values/{valueId}', [AttributeController::class, 'updateValue']);
+                Route::delete('/{attributeId}/values/{valueId}', [AttributeController::class, 'deleteValue']);
             });
         });
 
 
-        // Vendors
-        Route::prefix('vendors')->group(function () {
-            Route::get('/', [VendorController::class, 'index']);
-            Route::get('/all', [VendorController::class, 'all']);
-            Route::post('/', [VendorController::class, 'store']);
-            Route::get('/{vendorId}', [VendorController::class, 'show']);
-            Route::put('/{vendorId}', [VendorController::class, 'update']);
-            Route::delete('/{vendorId}', [VendorController::class, 'destroy']);
-        });
 
-        // Attributes
-        Route::prefix('attributes')->group(function () {
-            Route::get('/', [AttributeController::class, 'index']);
-            Route::get('/all', [AttributeController::class, 'all']);
-            Route::post('/', [AttributeController::class, 'store']);
-            Route::get('/{attributeId}', [AttributeController::class, 'show']);
-            Route::put('/{attributeId}', [AttributeController::class, 'update']);
-            Route::delete('/{attributeId}', [AttributeController::class, 'destroy']);
 
-            // Attribute Values
-            Route::post('/{attributeId}/values', [AttributeController::class, 'addValue']);
-            Route::put('/{attributeId}/values/{valueId}', [AttributeController::class, 'updateValue']);
-            Route::delete('/{attributeId}/values/{valueId}', [AttributeController::class, 'deleteValue']);
-        });
 
 
 

@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('categories', function (Blueprint $table) {
             $table->id();
 
+            $table->string('type');
             // Bilingual Names
             $table->string('name'); // English name
             $table->string('name_ar'); // Arabic name
@@ -18,6 +19,12 @@ return new class extends Migration
             // Details
             $table->text('description')->nullable();
             $table->text('description_ar')->nullable();
+
+            // Image
+            $table->string('image')->nullable();
+
+            // Parent Category (for subcategories)
+            $table->foreignId('parent_id')->nullable()->constrained('categories')->onDelete('cascade');
 
             // Module Association
             $table->foreignId('module_id')->constrained('modules')->onDelete('cascade');
@@ -39,6 +46,7 @@ return new class extends Migration
 
             // Indexes
             $table->index('module_id');
+            $table->index('parent_id');
             $table->index('created_by');
             $table->index('status');
             $table->index('order');

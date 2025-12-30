@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Role;
 
 class UserInvitationController extends Controller
 {
@@ -22,7 +22,7 @@ class UserInvitationController extends Controller
         $user = Auth::user();
 
         // Check permission
-        if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
+        if (!$user->isOwner() && !$user->hasRole('Super Admin') && !$user->hasRole('Admin')) {
             return response()->json([
                 'success' => false,
                 'message' => 'You do not have permission to invite users',
@@ -32,7 +32,8 @@ class UserInvitationController extends Controller
         $validator = Validator::make($request->all(), [
             'email' => ['required', 'email', 'unique:users,email'],
             'name' => ['nullable', 'string', 'max:255'],
-            'role' => ['nullable', 'string', 'in:Admin,Assistant,Sales,Finance'],
+            'role' => ['required', 'string', 'exists:roles,name'],
+            'phone' => ['nullable', 'string', 'max:20'],
         ]);
 
         if ($validator->fails()) {
@@ -45,17 +46,24 @@ class UserInvitationController extends Controller
         // Create pending user
         $newUser = User::create([
             'email' => $request->email,
-            'name' => $request->name ?? 'Pending User',
+            'name' => $request->name ?? $this->extractNameFromEmail($request->email),
+            'phone' => $request->phone,
             'status' => User::STATUS_PENDING,
             'invited_by' => $user->id,
             'is_owner' => false,
             'profile_completed' => false,
         ]);
 
+        // Assign role to pending user
+        $role = Role::where('name', $request->role)->first();
+        if ($role) {
+            $newUser->assignRole($role);
+        }
+
         // Generate invitation token
         $token = $newUser->generateInvitationToken();
 
-        // TODO: Send invitation email
+        // TODO: Send invitation email with the token
         // Mail::to($newUser->email)->send(new UserInvitation($newUser, $token));
 
         return response()->json([
@@ -66,11 +74,14 @@ class UserInvitationController extends Controller
                     'id' => $newUser->id,
                     'email' => $newUser->email,
                     'name' => $newUser->name,
+                    'phone' => $newUser->phone,
+                    'role' => $request->role,
                     'status' => $newUser->status,
                     'invited_at' => $newUser->invited_at,
                 ],
                 'invitation_token' => $token, // Only for testing - remove in production
                 // In production, this would be sent via email
+                'invitation_url' => url("/invite/{$token}"),
             ],
         ], 201);
     }
@@ -91,7 +102,8 @@ class UserInvitationController extends Controller
             ], 422);
         }
 
-        $user = User::where('invitation_token', $request->token)
+        $user = User::with('roles')
+            ->where('invitation_token', $request->token)
             ->where('status', User::STATUS_PENDING)
             ->first();
 
@@ -114,6 +126,8 @@ class UserInvitationController extends Controller
             'data' => [
                 'email' => $user->email,
                 'name' => $user->name,
+                'phone' => $user->phone,
+                'role' => $user->roles->pluck('name')->first(),
                 'invited_at' => $user->invited_at,
                 'expires_at' => $user->invited_at->addDays(7),
             ],
@@ -186,6 +200,7 @@ class UserInvitationController extends Controller
                     'phone' => $user->phone,
                     'title' => $user->title,
                     'status' => $user->status,
+                    'roles' => $user->roles->pluck('name'),
                 ],
                 'token' => $token,
             ],
@@ -200,14 +215,14 @@ class UserInvitationController extends Controller
         $user = Auth::user();
 
         // Check permission
-        if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
+        if (!$user->isOwner() && !$user->hasRole('Super Admin') && !$user->hasRole('Admin')) {
             return response()->json([
                 'success' => false,
                 'message' => 'You do not have permission to view invitations',
             ], 403);
         }
 
-        $users = User::with('inviter')
+        $users = User::with(['inviter', 'roles'])
             ->where('is_owner', false)
             ->orderBy('created_at', 'desc')
             ->get()
@@ -216,10 +231,13 @@ class UserInvitationController extends Controller
                     'id' => $u->id,
                     'name' => $u->name,
                     'email' => $u->email,
+                    'phone' => $u->phone,
                     'status' => $u->status,
+                    'role' => $u->roles->pluck('name')->first(),
                     'invited_by' => $u->inviter ? $u->inviter->name : null,
                     'invited_at' => $u->invited_at,
                     'is_expired' => $u->isPending() && !$u->hasValidInvitation(),
+                    'created_at' => $u->created_at,
                 ];
             });
 
@@ -231,6 +249,7 @@ class UserInvitationController extends Controller
                     'total' => $users->count(),
                     'active' => $users->where('status', User::STATUS_ACTIVE)->count(),
                     'pending' => $users->where('status', User::STATUS_PENDING)->count(),
+                    'suspended' => $users->where('status', User::STATUS_SUSPENDED)->count(),
                 ],
             ],
         ]);
@@ -244,7 +263,7 @@ class UserInvitationController extends Controller
         $currentUser = Auth::user();
 
         // Check permission
-        if (!$currentUser->isOwner() && !$currentUser->hasRole('Super Admin')) {
+        if (!$currentUser->isOwner() && !$currentUser->hasRole('Super Admin') && !$currentUser->hasRole('Admin')) {
             return response()->json([
                 'success' => false,
                 'message' => 'You do not have permission to resend invitations',
@@ -278,6 +297,7 @@ class UserInvitationController extends Controller
             'message' => 'Invitation resent successfully',
             'data' => [
                 'invitation_token' => $token, // Only for testing
+                'invitation_url' => url("/invite/{$token}"),
             ],
         ]);
     }
@@ -290,7 +310,7 @@ class UserInvitationController extends Controller
         $currentUser = Auth::user();
 
         // Check permission
-        if (!$currentUser->isOwner() && !$currentUser->hasRole('Super Admin')) {
+        if (!$currentUser->isOwner() && !$currentUser->hasRole('Super Admin') && !$currentUser->hasRole('Admin')) {
             return response()->json([
                 'success' => false,
                 'message' => 'You do not have permission to cancel invitations',
@@ -319,5 +339,20 @@ class UserInvitationController extends Controller
             'success' => true,
             'message' => 'Invitation cancelled successfully',
         ]);
+    }
+
+    /**
+     * Extract name from email address
+     */
+    private function extractNameFromEmail(string $email): string
+    {
+        $parts = explode('@', $email);
+        $localPart = $parts[0];
+
+        // Replace dots and underscores with spaces
+        $name = str_replace(['.', '_', '-'], ' ', $localPart);
+
+        // Capitalize each word
+        return ucwords($name);
     }
 }

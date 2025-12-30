@@ -392,7 +392,7 @@ class CreateTenantService
                 $user = User::create([
                     'name' => $member['name'] ?? $this->extractNameFromEmail($member['email']),
                     'email' => $member['email'],
-                    'password' => null, // Will be set when user completes profile
+                    'password' => 'P@ssw0rd', // Will be set when user completes profile
                     'status' => User::STATUS_PENDING,
                     'is_owner' => false,
                     'profile_completed' => false,

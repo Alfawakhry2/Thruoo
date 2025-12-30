@@ -47,8 +47,8 @@ class TenantRegistrationRequest extends FormRequest
             // Step 3: Additional Users (Optional, max 4)
             'team_members' => ['nullable', 'array', 'max:4'],
             'team_members.*.name' => ['required', 'string', 'max:255'],
-            'team_members.*.email' => ['required', 'email', 'max:255', 'distinct'],
-            'team_members.*.role' => ['required', 'in:Admin,Assistant,Sales,Finance'],
+            'team_members.*.email' => ['nullable', 'email', 'max:255', 'distinct'],
+            'team_members.*.role' => ['nullable', 'in:Admin,Assistant,Sales,Finance'],
 
             // Step 4: Modules & Referral
             'modules' => ['required', 'array', 'min:1'],

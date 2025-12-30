@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers\Modules\Sales\Api;
 
-use App\Http\Controllers\Controller;
-use App\Models\Modules\Module;
-use App\Models\Modules\Sales\Category;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Models\Modules\Module;
+use Illuminate\Http\JsonResponse;
+use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Modules\Sales\Category;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
 class CategoryController extends Controller
@@ -25,6 +26,7 @@ class CategoryController extends Controller
 
         $perPage = $request->query('per_page', 15);
         $status = $request->query('status');
+        $type = $request->query('type');
         $parentId = $request->query('parent_id');
         $withCounts = $request->query('with_counts', false);
 
@@ -36,6 +38,9 @@ class CategoryController extends Controller
             $query->where('status', $status);
         }
 
+        if ($type) {
+            $query->where('type', $type);
+        }
         // Filter by parent (root categories or subcategories)
         if ($parentId === 'null' || $parentId === null) {
             $query->whereNull('parent_id'); // Root categories only
@@ -68,13 +73,15 @@ class CategoryController extends Controller
 
         $status = $request->query('status', 'active');
         $rootOnly = $request->query('root_only', false);
-
+        $type = $request->query('type');
         $query = Category::where('module_id', $moduleId);
 
         if ($status !== 'all') {
             $query->where('status', $status);
         }
-
+        if ($type) {
+            $query->where('type', $type);
+        }
         if ($rootOnly) {
             $query->whereNull('parent_id');
         }
@@ -106,6 +113,7 @@ class CategoryController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
+            'type' => ['required', 'string', 'in:service,product,unit'],
             'name' => ['required', 'string', 'max:255'],
             'name_ar' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -115,6 +123,7 @@ class CategoryController extends Controller
             'order' => ['nullable', 'integer', 'min:0'],
             'team_ids' => ['nullable', 'array'],
             'team_ids.*' => ['exists:teams,id'],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
         ]);
 
         if ($validator->fails()) {
@@ -129,6 +138,13 @@ class CategoryController extends Controller
         $data['created_by'] = Auth::id();
         $data['status'] = $data['status'] ?? 'active';
 
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            $image = $request->file('image');
+            $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+            $imagePath = $image->storeAs('categories', $imageName, 'public');
+            $data['image'] = $imagePath;
+        }
         $teamIds = $data['team_ids'] ?? [];
         unset($data['team_ids']);
 
@@ -160,13 +176,13 @@ class CategoryController extends Controller
             'creator',
             'teams',
             'parent',
-            'children' => function($query) {
+            'children' => function ($query) {
                 $query->withCount(['products', 'children']);
             }
         ])
-        ->withCount(['products', 'children'])
-        ->where('module_id', $moduleId)
-        ->find($categoryId);
+            ->withCount(['products', 'children'])
+            ->where('module_id', $moduleId)
+            ->find($categoryId);
 
         if (!$category) {
             return response()->json([
@@ -208,6 +224,7 @@ class CategoryController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
+            'type' => ['sometimes', 'string', 'in:service,product,unit'],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'name_ar' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -217,6 +234,8 @@ class CategoryController extends Controller
             'order' => ['nullable', 'integer', 'min:0'],
             'team_ids' => ['nullable', 'array'],
             'team_ids.*' => ['exists:teams,id'],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg', 'max:2048'],
+
         ]);
 
         if ($validator->fails()) {
@@ -236,6 +255,18 @@ class CategoryController extends Controller
             ], 422);
         }
 
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($category->image) {
+                Storage::disk('public')->delete($category->image);
+            }
+
+            $image = $request->file('image');
+            $imageName = time() . '_' . uniqid() . '.' . $image->getClientOriginalExtension();
+            $imagePath = $image->storeAs('categories', $imageName, 'public');
+            $data['image'] = $imagePath;
+        }
         $teamIds = $data['team_ids'] ?? null;
         unset($data['team_ids']);
 
@@ -294,7 +325,10 @@ class CategoryController extends Controller
                 'message' => 'Cannot delete category with subcategories',
             ], 400);
         }
-
+        // Before $category->delete();
+        if ($category->image) {
+            Storage::disk('public')->delete($category->image);
+        }
         $category->teams()->detach();
         $category->delete();
 
@@ -398,6 +432,44 @@ class CategoryController extends Controller
             'success' => true,
             'message' => 'Teams assigned successfully',
             'data' => $category->load('teams'),
+        ]);
+    }
+
+    public function toggleStatus($moduleId, $id): JsonResponse
+    {
+        // Verify module
+        $module = Module::find($moduleId);
+        if (!$module) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Module not found',
+            ], 404);
+        }
+        // Check permission
+        $user = Auth::user();
+        if (!$user->isOwner() && !$user->hasRole('Super Admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to update category status',
+            ], 403);
+        }
+
+        $category = Category::find($id);
+
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Category not found',
+            ], 404);
+        }
+
+        $category->status = $category->status === 'active' ? 'inactive' : 'active';
+        $category->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Category status ' . $category->status,
+            // 'data' => $category,
         ]);
     }
 }

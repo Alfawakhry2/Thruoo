@@ -16,6 +16,7 @@ class Category extends Model
     protected $connection = 'tenant';
 
     protected $fillable = [
+        'type',
         'name',
         'name_ar',
         'description',
@@ -26,6 +27,7 @@ class Category extends Model
         'order',
         'parent_id', // For subcategories
         'settings',
+        'image'
     ];
 
     protected $casts = [
@@ -36,7 +38,8 @@ class Category extends Model
         'updated_at' => 'datetime',
     ];
 
-    protected $hidden = ['pivot'];
+    protected $hidden = ['pivot' , 'image'];
+    protected $appends = ['image_url'];
 
     /**
      * Get the module this category belongs to
@@ -126,6 +129,24 @@ class Category extends Model
         }
 
         return array_unique($ids);
+    }
+
+    /**
+     * Get the full URL for the category image
+     */
+    public function getImageUrlAttribute(): ?string
+    {
+        if (!$this->image) {
+            return null;
+        }
+
+        // If it's already a full URL, return it
+        if (filter_var($this->image, FILTER_VALIDATE_URL)) {
+            return $this->image;
+        }
+
+        // Otherwise, prepend storage URL
+        return asset('storage/' . $this->image);
     }
 
     /**
