@@ -5,7 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Spatie\Multitenancy\Models\Tenant;
+use App\Models\Landlord\Company;
 
 class EnsureSubscriptionActive
 {
@@ -16,22 +16,22 @@ class EnsureSubscriptionActive
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $tenant = Tenant::current();
+        $company = Company::current();
 
-        if (!$tenant) {
+        if (!$company) {
             return response()->json([
                 'success' => false,
-                'message' => 'Tenant not found',
+                'message' => 'Company not found',
             ], 404);
         }
 
-        // Check if tenant is active (trial, grace period, or subscription)
-        if (!$tenant->isActive()) {
+        // Check if company is active (trial, grace period, or subscription)
+        if (!$company->isActive()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Subscription has expired. Please renew your subscription.',
-                'trial_ends_at' => $tenant->trial_ends_at?->toIso8601String(),
-                'subscription_ends_at' => $tenant->subscription_ends_at?->toIso8601String(),
+                'trial_ends_at' => $company->trial_ends_at?->toIso8601String(),
+                'subscription_ends_at' => $company->subscription_ends_at?->toIso8601String(),
             ], 403);
         }
 
