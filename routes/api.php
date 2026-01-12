@@ -4,7 +4,6 @@ use Illuminate\Http\Request;
 use App\Models\Modules\Module;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\GlobalAuthController;
 use App\Http\Controllers\Modules\Sales\Api\TaxController;
 use App\Http\Controllers\Modules\Sales\Api\LeadController;
 use App\Http\Controllers\Modules\Sales\Api\TeamController;
@@ -38,61 +37,23 @@ use App\Http\Controllers\Modules\Sales\Api\Account\AccountSettingsController;
 |--------------------------------------------------------------------------
 */
 
-
-/*
-|--------------------------------------------------------------------------
-| Global API Routes (Main Domain Only)
-|--------------------------------------------------------------------------
-| These routes work on the main domain (thruoo.com or thruoo.local)
-| NOT on company subdomains
-*/
-
-Route::prefix('auth')->group(function () {
-    // Get companies by email (without password validation)
-    Route::post('/companies-by-email', [GlobalAuthController::class, 'getCompaniesByEmail']);
-
-    // Global login - validates password and returns companies or auto-logs in
-    Route::post('/global-login', [GlobalAuthController::class, 'globalLogin']);
-
-    // Login with company selection (company_id/subdomain + email + password)
-    Route::post('/login-with-company', [GlobalAuthController::class, 'loginWithCompany']);
-
-    // Direct company login (alias for loginWithCompany)
-    Route::post('/company-login', [GlobalAuthController::class, 'companyLogin']);
-});
-
 Route::prefix('registration')->group(function () {
-    // Get registration options
+    // Get registration options (industries, modules, etc.)
     Route::get('/options', [TenantRegistrationController::class, 'getOptions']);
 
-    // Suggest subdomain from company name
-    Route::post('/suggest-subdomain', [TenantRegistrationController::class, 'suggestSubdomain']);
-
-    // Check subdomain availability
+    // Validation endpoints
     Route::post('/check-subdomain', [TenantRegistrationController::class, 'checkSubdomain']);
+    Route::post('/check-company-name', [TenantRegistrationController::class, 'checkCompanyName']);
+    Route::post('/check-email', [TenantRegistrationController::class, 'checkEmail']);
+    Route::post('/suggest-subdomain', [TenantRegistrationController::class, 'suggestSubdomain']);
+    Route::post('/verify-referral', [TenantRegistrationController::class, 'verifyReferralCode']);
 
-    // Register new tenant + company
+    // Step validation
+    Route::post('/validate-step', [TenantRegistrationController::class, 'validateStep']);
+
+    // Final registration
     Route::post('/register', [TenantRegistrationController::class, 'register']);
 });
-
-
-// Route::prefix('registration')->group(function () {
-//     // Get registration options (industries, modules, etc.)
-//     Route::get('/options', [TenantRegistrationController::class, 'getOptions']);
-
-//     // Validation endpoints
-//     Route::post('/check-subdomain', [TenantRegistrationController::class, 'checkSubdomain']);
-//     Route::post('/check-company-name', [TenantRegistrationController::class, 'checkCompanyName']);
-//     Route::post('/check-email', [TenantRegistrationController::class, 'checkEmail']);
-//     Route::post('/suggest-subdomain', [TenantRegistrationController::class, 'suggestSubdomain']);
-//     Route::post('/verify-referral', [TenantRegistrationController::class, 'verifyReferralCode']);
-
-//     // Step validation
-//     Route::post('/validate-step', [TenantRegistrationController::class, 'validateStep']);
-
-//     // Final registration
-//     Route::post('/register', [TenantRegistrationController::class, 'register']);
-// });
 
 // Legacy route (keep for backward compatibility)
 Route::post('/tenants/register', [TenantRegistrationController::class, 'register']);

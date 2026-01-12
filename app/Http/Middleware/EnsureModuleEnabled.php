@@ -5,7 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use App\Models\Landlord\Company;
+use Spatie\Multitenancy\Models\Tenant;
 
 class EnsureModuleEnabled
 {
@@ -17,12 +17,12 @@ class EnsureModuleEnabled
      */
     public function handle(Request $request, Closure $next, string $module): Response
     {
-        $company = Company::current();
+        $tenant = Tenant::current();
 
-        if (!$company || !$company->hasModule($module)) {
+        if (!$tenant || !$tenant->hasModule($module)) {
             return response()->json([
                 'success' => false,
-                'message' => "Module '{$module}' is not enabled for this company",
+                'message' => "Module '{$module}' is not enabled for this tenant",
             ], 403);
         }
 
