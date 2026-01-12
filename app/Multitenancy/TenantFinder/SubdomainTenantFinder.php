@@ -17,13 +17,13 @@ class SubdomainTenantFinder extends TenantFinder
     public function findForRequest(Request $request): ?Tenant
     {
         $host = $request->getHost();
-
+        
         // Remove port if present (e.g., acme.thruoo.local:8000 -> acme.thruoo.local)
         $host = preg_replace('/:\d+$/', '', $host);
-
+        
         // Extract subdomain from host (e.g., demo.thruoo.local -> demo)
         $tenantDomain = config('app.tenant_domain', 'thruoo.local');
-
+        
         // Check if it's a subdomain request
         if (str_ends_with($host, '.' . $tenantDomain)) {
             $subdomain = str_replace('.' . $tenantDomain, '', $host);
@@ -35,11 +35,11 @@ class SubdomainTenantFinder extends TenantFinder
             $tenant = Tenant::on('mysql')->where('domain', $host)
                 ->where('status', 'active')
                 ->first();
-
+            
             if ($tenant) {
                 return $tenant;
             }
-
+            
             // Try to extract subdomain from any domain
             $parts = explode('.', $host);
             if (count($parts) >= 2) {
@@ -48,7 +48,7 @@ class SubdomainTenantFinder extends TenantFinder
                 return null;
             }
         }
-
+        
         // Find tenant by subdomain (use landlord connection)
         return Tenant::on('mysql')->where('subdomain', $subdomain)
             ->where('status', 'active')

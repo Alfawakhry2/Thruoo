@@ -1,38 +1,39 @@
 <?php
 
-use App\Models\Landlord\Company;
-use App\Multitenancy\TenantFinder\CompanyTenantFinder;
+use Spatie\Multitenancy\Jobs\TenantAware;
 use Illuminate\Broadcasting\BroadcastEvent;
 use Illuminate\Events\CallQueuedListener;
 use Illuminate\Mail\SendQueuedMailable;
+use Spatie\Multitenancy\Jobs\NotTenantAware;
 use Illuminate\Notifications\SendQueuedNotifications;
 use Illuminate\Queue\CallQueuedClosure;
 use Spatie\Multitenancy\Actions\ForgetCurrentTenantAction;
 use Spatie\Multitenancy\Actions\MakeQueueTenantAwareAction;
 use Spatie\Multitenancy\Actions\MakeTenantCurrentAction;
 use Spatie\Multitenancy\Actions\MigrateTenantAction;
-use Spatie\Multitenancy\Jobs\NotTenantAware;
-use Spatie\Multitenancy\Jobs\TenantAware;
+use App\Models\Landlord\Tenant;
 
 return [
     /*
      * This class is responsible for determining which tenant should be current
      * for the given request.
      *
-     * IMPORTANT: Changed to CompanyTenantFinder to resolve by Company subdomain
+     * This class should extend `Spatie\Multitenancy\TenantFinder\TenantFinder`
+     *
      */
-    'tenant_finder' => CompanyTenantFinder::class,
+    'tenant_finder' => \App\Multitenancy\TenantFinder\SubdomainTenantFinder::class,
 
     /*
      * These fields are used by tenant:artisan command to match one or more tenant.
      */
     'tenant_artisan_search_fields' => [
         'id',
-        'subdomain',
     ],
 
     /*
      * These tasks will be performed when switching tenants.
+     *
+     * A valid task is any class that implements Spatie\Multitenancy\Tasks\SwitchTenantTask
      */
     'switch_tenant_tasks' => [
         \Spatie\Multitenancy\Tasks\SwitchTenantDatabaseTask::class,
@@ -41,18 +42,22 @@ return [
     /*
      * This class is the model used for storing configuration on tenants.
      *
-     * IMPORTANT: Changed to Company model (not Tenant)
+     * It must  extend `Spatie\Multitenancy\Models\Tenant::class` or
+     * implement `Spatie\Multitenancy\Contracts\IsTenant::class` interface
      */
-    'tenant_model' => Company::class,
+    'tenant_model' => Tenant::class,
 
     /*
      * If there is a current tenant when dispatching a job, the id of the current tenant
-     * will be automatically set on the job.
+     * will be automatically set on the job. When the job is executed, the set
+     * tenant on the job will be made current.
      */
     'queues_are_tenant_aware_by_default' => true,
 
     /*
      * The connection name to reach the tenant database.
+     *
+     * Set to `null` to use the default connection.
      */
     'tenant_database_connection_name' => 'tenant',
 
@@ -62,11 +67,14 @@ return [
     'landlord_database_connection_name' => 'mysql',
 
     /*
-     * This key will be used to bind the current tenant in the container.
-     * IMPORTANT: Changed to 'companyId' and 'currentCompany'
+     * This key will be used to associate the current tenant in the context
      */
-    'current_tenant_context_key' => 'companyId',
-    'current_tenant_container_key' => 'currentCompany',
+    'current_tenant_context_key' => 'tenantId',
+
+    /*
+     * This key will be used to bind the current tenant in the container.
+     */
+    'current_tenant_container_key' => 'currentTenant',
 
     /*
      * Set it to `true` if you like to cache the tenant(s) routes
@@ -76,6 +84,7 @@ return [
 
     /*
      * You can customize some of the behavior of this package by using your own custom action.
+     * Your custom action should always extend the default one.
      */
     'actions' => [
         'make_tenant_current_action' => MakeTenantCurrentAction::class,
@@ -86,6 +95,9 @@ return [
 
     /*
      * You can customize the way in which the package resolves the queueable to a job.
+     *
+     * For example, using the package laravel-actions (by Loris Leiva), you can
+     * resolve JobDecorator to getAction() like so: JobDecorator::class => 'getAction'
      */
     'queueable_to_job' => [
         SendQueuedMailable::class => 'mailable',
@@ -96,8 +108,8 @@ return [
     ],
 
     /*
-     * Interface that once implemented, will make the job tenant aware
-     */
+    * Interface that once implemented, will make the job tenant aware
+    */
     'tenant_aware_interface' => TenantAware::class,
 
     /*
