@@ -2,42 +2,48 @@
 
 namespace App\Multitenancy\TenantFinder;
 
-use App\Models\Landlord\Tenant;
+use App\Models\Landlord\Company;
 use Illuminate\Http\Request;
 use Spatie\Multitenancy\TenantFinder\TenantFinder;
 
-class SubdomainTenantFinder extends TenantFinder
+/**
+ * Company Tenant Finder
+ * Resolves tenant by Company subdomain (not old Tenant model)
+ */
+class CompanyTenantFinder extends TenantFinder
 {
     /**
-     * Find tenant by subdomain from request host
+     * Find company (tenant) by subdomain from request host
      *
      * @param Request $request
-     * @return Tenant|null
+     * @return Company|null
      */
-    public function findForRequest(Request $request): ?Tenant
+    public function findForRequest(Request $request): ?Company
     {
         $host = $request->getHost();
 
         // Remove port if present (e.g., acme.thruoo.local:8000 -> acme.thruoo.local)
         $host = preg_replace('/:\d+$/', '', $host);
 
-        // Extract subdomain from host (e.g., demo.thruoo.local -> demo)
+        // Extract subdomain from host
         $tenantDomain = config('app.tenant_domain', 'thruoo.local');
 
         // Check if it's a subdomain request
         if (str_ends_with($host, '.' . $tenantDomain)) {
+            // Extract subdomain (e.g., ahmed-tech.thruoo.local -> ahmed-tech)
             $subdomain = str_replace('.' . $tenantDomain, '', $host);
         } elseif ($host === $tenantDomain) {
-            // Main domain - no tenant
+            // Main domain - no tenant/company
             return null;
         } else {
             // Check for custom domain (use landlord connection)
-            $tenant = Tenant::on('mysql')->where('domain', $host)
-                ->where('status', 'active')
+            $company = Company::on('mysql')
+                ->where('domain', $host)
+                ->where('status', Company::STATUS_ACTIVE)
                 ->first();
 
-            if ($tenant) {
-                return $tenant;
+            if ($company) {
+                return $company;
             }
 
             // Try to extract subdomain from any domain
@@ -49,10 +55,10 @@ class SubdomainTenantFinder extends TenantFinder
             }
         }
 
-        // Find tenant by subdomain (use landlord connection)
-        return Tenant::on('mysql')->where('subdomain', $subdomain)
-            ->where('status', 'active')
+        // Find company by subdomain (use landlord connection)
+        return Company::on('mysql')
+            ->where('subdomain', $subdomain)
+            ->where('status', Company::STATUS_ACTIVE)
             ->first();
     }
 }
-

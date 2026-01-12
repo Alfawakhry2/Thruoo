@@ -145,12 +145,12 @@ class SubdomainGenerator
     {
         // Clean and prepare the company name
         $subdomain = self::sanitize($companyName);
-        
+
         // Check if it's reserved or already exists
         if (self::isReserved($subdomain) || self::exists($subdomain)) {
             $subdomain = self::makeUnique($subdomain);
         }
-        
+
         return $subdomain;
     }
 
@@ -161,30 +161,30 @@ class SubdomainGenerator
     {
         // Convert to lowercase
         $subdomain = Str::lower($name);
-        
+
         // Replace Arabic/special characters with Latin equivalents where possible
         $subdomain = self::transliterate($subdomain);
-        
+
         // Replace spaces and special characters with hyphens
         $subdomain = preg_replace('/[^a-z0-9]+/', '-', $subdomain);
-        
+
         // Remove leading/trailing hyphens
         $subdomain = trim($subdomain, '-');
-        
+
         // Remove consecutive hyphens
         $subdomain = preg_replace('/-+/', '-', $subdomain);
-        
+
         // Limit length (max 63 characters for subdomain)
         $subdomain = Str::limit($subdomain, 50, '');
-        
+
         // Ensure it doesn't end with hyphen after limiting
         $subdomain = rtrim($subdomain, '-');
-        
+
         // If empty after sanitization, generate a random one
         if (empty($subdomain)) {
             $subdomain = 'company-' . Str::random(8);
         }
-        
+
         return $subdomain;
     }
 
@@ -210,7 +210,7 @@ class SubdomainGenerator
             'ù' => 'u', 'ú' => 'u', 'û' => 'u',
             'ñ' => 'n', 'ç' => 'c',
         ];
-        
+
         return strtr($string, $transliterations);
     }
 
@@ -248,24 +248,24 @@ class SubdomainGenerator
     {
         $original = $subdomain;
         $counter = 1;
-        
+
         // Limit the original part to leave room for counter
         $maxOriginalLength = 45;
         if (strlen($original) > $maxOriginalLength) {
             $original = substr($original, 0, $maxOriginalLength);
         }
-        
+
         while (self::isReserved($subdomain) || self::exists($subdomain)) {
             $subdomain = $original . '-' . $counter;
             $counter++;
-            
+
             // Safety limit
             if ($counter > 1000) {
                 $subdomain = $original . '-' . Str::random(8);
                 break;
             }
         }
-        
+
         return $subdomain;
     }
 
@@ -276,26 +276,26 @@ class SubdomainGenerator
     {
         $suggestions = [];
         $base = self::sanitize($companyName);
-        
+
         // First suggestion: direct sanitization
         if (self::isAvailable($base)) {
             $suggestions[] = $base;
         }
-        
+
         // Generate additional suggestions
         $suffixes = ['app', 'hub', 'pro', 'hq', 'team', 'co'];
-        
+
         foreach ($suffixes as $suffix) {
             if (count($suggestions) >= $count) {
                 break;
             }
-            
+
             $suggestion = $base . '-' . $suffix;
             if (self::isAvailable($suggestion)) {
                 $suggestions[] = $suggestion;
             }
         }
-        
+
         // If still not enough, add numbered suggestions
         $counter = 1;
         while (count($suggestions) < $count && $counter <= 10) {
@@ -305,7 +305,7 @@ class SubdomainGenerator
             }
             $counter++;
         }
-        
+
         return array_slice($suggestions, 0, $count);
     }
 
@@ -318,17 +318,17 @@ class SubdomainGenerator
         if (strlen($subdomain) < 3 || strlen($subdomain) > 63) {
             return false;
         }
-        
+
         // Must contain only lowercase letters, numbers, and hyphens
         if (!preg_match('/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/', $subdomain)) {
             return false;
         }
-        
+
         // Must not have consecutive hyphens
         if (strpos($subdomain, '--') !== false) {
             return false;
         }
-        
+
         return true;
     }
 
@@ -340,35 +340,35 @@ class SubdomainGenerator
         if (strlen($subdomain) < 3) {
             return 'Subdomain must be at least 3 characters long';
         }
-        
+
         if (strlen($subdomain) > 63) {
             return 'Subdomain must not exceed 63 characters';
         }
-        
+
         if (!preg_match('/^[a-z0-9]/', $subdomain)) {
             return 'Subdomain must start with a letter or number';
         }
-        
+
         if (!preg_match('/[a-z0-9]$/', $subdomain)) {
             return 'Subdomain must end with a letter or number';
         }
-        
+
         if (!preg_match('/^[a-z0-9-]+$/', $subdomain)) {
             return 'Subdomain can only contain lowercase letters, numbers, and hyphens';
         }
-        
+
         if (strpos($subdomain, '--') !== false) {
             return 'Subdomain cannot contain consecutive hyphens';
         }
-        
+
         if (self::isReserved($subdomain)) {
             return 'This subdomain is reserved and cannot be used';
         }
-        
+
         if (self::exists($subdomain)) {
             return 'This subdomain is already taken';
         }
-        
+
         return null;
     }
 }
